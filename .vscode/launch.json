@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Compilar y depurar en WSL",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/boot/boot",
+      "args": ["${workspaceFolder}/minikernel/kernel"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "make build",
+      "stopAtEntry": false,
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+    {
+      "description": "Ignorar SIGUSR1 en el depurador",
+      "text": "-interpreter-exec console \"handle SIGUSR1 nostop noprint pass\"",
+      "ignoreFailures": false
+    }
+  ]
+    },
+    {
+      "name": "Ejecutar sin depurar",
+      "type": "cppdbg",
+      "request": "launch",
+      "noDebug": true,
+      "program": "${workspaceFolder}/boot/boot",
+      "args": ["${workspaceFolder}/minikernel/kernel"],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "make build",
+      "externalConsole": false,
+      "MIMode": "gdb"
+    }
+  ]
+}
