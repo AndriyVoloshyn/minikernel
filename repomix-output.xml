@@ -1,0 +1,2055 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+boot/
+  boot_32
+  boot_64
+  Makefile
+minikernel/
+  include/
+    const.h
+    HAL.h
+    kernel.h
+    llamsis.h
+  HAL.o_32
+  HAL.o_64
+  kernel.c
+  Makefile
+usuario/
+  include/
+    servicios.h
+  lib/
+    Makefile
+    misc.o_32
+    misc.o_64
+    serv.c
+  abridor.c
+  creador1.c
+  creador2.c
+  creador3.c
+  creador4.c
+  dormilon.c
+  excep_arit
+  excep_arit.c
+  excep_mem
+  excep_mem.c
+  init
+  init.c
+  lector.c
+  Makefile
+  mudo.c
+  mutex1.c
+  mutex2.c
+  prueba_dormir
+  prueba_dormir.c
+  prueba_mutex1
+  prueba_mutex1.c
+  prueba_mutex2.c
+  prueba_RR1
+  prueba_RR1.c
+  prueba_RR2
+  prueba_RR2.c
+  prueba_term
+  prueba_term.c
+  simplon
+  simplon.c
+  yosoy.c
+.gitignore
+Makefile
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="boot/Makefile">
+#
+# boot/Makefile
+#       Makefile para el boot
+#
+
+CC=gcc
+CFLAGS= -g -Wall
+
+all:
+	@ln -sf boot_`getconf LONG_BIT` boot
+
+boot: boot.o 
+	$(CC) -o $@ boot.o -ldl
+
+clean:
+	rm -f boot.o boot
+</file>
+
+<file path="minikernel/include/const.h">
+/*
+ *  minikernel/include/const.h
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ *
+ * Fichero de cabecera que contiene definiciones de constantes
+ *
+ *	NO SE DEBE MODIFICAR
+ *
+ */
+
+#ifndef _CONST_H
+#define _CONST_H
+
+#ifndef NULL
+#define NULL (void *) 0		/* por si acaso no esta ya definida */
+#endif
+
+#define MAX_PROC 10		/* dimension de tabla de procesos */
+
+#define TAM_PILA 32768
+
+
+/*
+ * Posibles estados del proceso
+ */
+#define NO_USADA 0		/* Entrada de tabla de procs. no usada */
+#define TERMINADO 0		/* Proc. TERMINADO == entrada NO_USADA */
+#define LISTO 1
+#define EJECUCION 2
+#define BLOQUEADO 3
+
+/*
+ * Niveles de ejecución del procesador. 
+ */
+#define NUM_NIVELES 3
+#define NIVEL_1 1 /* Int. SW */
+#define NIVEL_2 2 /* Int. Terminal */
+#define NIVEL_3 3 /* Int. Reloj */
+
+/*
+ *
+ *  Definicion de constantes relacionadas con vectores de interrupcion
+ *
+ */
+
+/* Numero de vectores de interrupcion disponibles */
+#define NVECTORES 6
+
+/* Numeros de vector */
+#define EXC_ARITM 0     /* excepcion aritmetica */
+#define EXC_MEM 1       /* excepcion en acceso a memoria */
+#define INT_RELOJ 2     /* interrupcion de reloj */
+#define INT_TERMINAL 3  /* interrupcion de entrada de terminal */
+#define LLAM_SIS 4      /* vector usado para llamadas */
+#define INT_SW 5	/* vector usado para interrupciones software */
+
+/* frecuencia de reloj requerida (ticks/segundo) */
+#define TICK 100
+
+/* constante usada en implementacion de round robin */
+#define TICKS_POR_RODAJA 10
+
+/* constantes usada en implementacion de mutex */
+#define NUM_MUT 16 /* numero total de mutex en el sistema */
+#define NUM_MUT_PROC 4 /* numero maximo de mutex que puede tener
+			  abiertos un proceso */
+#define MAX_NOM_MUT 8 /* longitud maxima de un nombre de mutex */
+
+/* constante usada en implementacion de manejador de terminal */
+#define TAM_BUF_TERM 8 /* tamaño del buffer del terminal */
+
+/* dirección de puerto de E/S del terminal */
+#define DIR_TERMINAL 1
+
+#endif /* _CONST_H */
+</file>
+
+<file path="minikernel/include/HAL.h">
+/*
+ *  minikernel/include/HAL.h
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ *
+ * Fichero de cabecera que contiene los prototipos de las funciones
+ * proporcionadas por el módulo HAL.
+ *
+ * 	NO SE DEBE MODIFICAR
+ *
+ */
+
+#ifndef _HAL_H
+#define _HAL_H
+
+
+/* La versión actual no usa en Linux las primitivas de gestión de contexto
+   disponibles en algunos UNIX ("makecontext", "setcontext", ...), ya que,
+   que yo sepa, por ahora no están implementadas. En su lugar recurre
+   a una versión más "cutre" basada en "setjmp". n una próxima versión
+   deberian desaparecer. */
+
+#ifndef __linux__
+
+/* Para sistemas con "makecontext" como Digital UNIX */
+#include <ucontext.h>
+
+#else /* linux */
+#include <linux/version.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,1)
+/* Para Linux modernos que también lo tienen */
+#include <ucontext.h>
+
+#else
+/* Para Linux antiguos */
+#include <setjmp.h>
+#include <signal.h>
+
+typedef struct st_contexto {
+	stack_t uc_stack;
+	char * args;
+	sigjmp_buf contexto;
+	void * uc_link;
+	sigset_t uc_sigmask;
+	
+} ucontext_t;
+
+#endif /* linux2.2 */
+#endif /* linux */
+
+/* Registros generales del procesador */
+#define NREGS 6
+
+/* Contexto "hardware" de un proceso */
+typedef struct {
+	ucontext_t ctxt;
+	long registros[NREGS];
+} contexto_t;
+
+
+
+/*
+ *
+ * Operaciones relacionadas con los dispositivos y las interrupciones.
+ *
+ */
+
+unsigned long long int leer_reloj_CMOS(); /* obtiene hora del rejoj CMOS */
+
+void iniciar_cont_reloj(int ticks_por_seg); /* iniciar controlador de reloj */
+
+void iniciar_cont_teclado(); /* iniciar controlador de teclado */
+
+void iniciar_cont_int();  /* iniciar controlador de interrupciones. */
+
+void instal_man_int(int nvector, void (*manej)()); /* instala un manejador */
+
+int fijar_nivel_int(int nivel); /* fija nivel de interrupción
+                                   del procesador devolviendo el previo */
+
+int viene_de_modo_usuario(); /* Devuelve verdadero si el modo previo de
+			    ejecución del procesador era usuario */
+
+void activar_int_SW(); /* activa la interrupción SW */
+
+/*
+ *
+ * Operación de salvaguarda y recuperación de contexto hardware del proceso.
+ * Rutina que realiza el cambio de contexto. Si (contexto_a_salvar==NULL)
+ * no salva contexto, sólo restaura
+ *
+ */
+void cambio_contexto(contexto_t *contexto_a_salvar, contexto_t *contexto_a_restaurar);
+
+
+/*
+ *
+ * Operaciones relacionadas con mapa de memoria del proceso y pila
+ *
+ */
+
+/* crea mapa de memoria a partir de ejecutable "prog" devolviendo un
+descriptor de dicho mapa y la dirección del punto de arranque del programa */
+void * crear_imagen(char *prog, void **dir_ini); 
+
+void * crear_pila(int tam); /* crea la pila del proceso */
+
+/* crea el contexto inicial del proceso */
+void fijar_contexto_ini(void *mem, void *p_pila, int tam_pila,
+			void * pc_inicial, contexto_t *contexto_ini);
+
+void liberar_imagen(void *mem);		/* libera el mapa de memoria */
+
+void liberar_pila(void *pila);		/* libera la pila del proceso */
+
+/*
+ *
+ * Operaciones misceláneas
+ *
+ */
+
+long leer_registro(int nreg); 
+
+int escribir_registro(int nreg, long valor); 
+
+char leer_puerto(int dir_puerto); /* lee un carácter del puerto especificado */
+
+void halt();	/* Ejecuta una instrucción HALT para parar UCP */
+
+void panico(char *mens); /* muestra mensaje y termina SO */
+
+void escribir_ker(char *buffer, unsigned int longi); /* escribe en pantalla */
+
+#define printf printk /* evita uso de printf de bilioteca estándar */
+
+int printk(const char *, ...); /* escribe en pantalla con formato */
+
+
+#endif /* _HAL_H */
+</file>
+
+<file path="minikernel/include/kernel.h">
+/*
+ *  minikernel/include/kernel.h
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ *
+ * Fichero de cabecera que contiene definiciones usadas por kernel.c
+ *
+ *      SE DEBE MODIFICAR PARA INCLUIR NUEVA FUNCIONALIDAD
+ *
+ */
+
+#ifndef _KERNEL_H
+#define _KERNEL_H
+
+#include "const.h"
+#include "HAL.h"
+#include "llamsis.h"
+
+/*
+ *
+ * Definicion del tipo que corresponde con el BCP.
+ * Se va a modificar al incluir la funcionalidad pedida.
+ *
+ */
+typedef struct BCP_t *BCPptr;
+
+typedef struct BCP_t {
+        int id;				/* ident. del proceso */
+        int estado;			/* TERMINADO|LISTO|EJECUCION|BLOQUEADO*/
+        contexto_t contexto_regs;	/* copia de regs. de UCP */
+        void * pila;			/* dir. inicial de la pila */
+	BCPptr siguiente;		/* puntero a otro BCP */
+	void *info_mem;			/* descriptor del mapa de memoria */
+} BCP;
+
+/*
+ *
+ * Definicion del tipo que corresponde con la cabecera de una lista
+ * de BCPs. Este tipo se puede usar para diversas listas (procesos listos,
+ * procesos bloqueados en semáforo, etc.).
+ *
+ */
+
+typedef struct{
+	BCP *primero;
+	BCP *ultimo;
+} lista_BCPs;
+
+
+/*
+ * Variable global que identifica el proceso actual
+ */
+
+BCP * p_proc_actual=NULL;
+
+/*
+ * Variable global que representa la tabla de procesos
+ */
+
+BCP tabla_procs[MAX_PROC];
+
+/*
+ * Variable global que representa la cola de procesos listos
+ */
+lista_BCPs lista_listos= {NULL, NULL};
+
+/*
+ *
+ * Definición del tipo que corresponde con una entrada en la tabla de
+ * llamadas al sistema.
+ *
+ */
+typedef struct{
+	int (*fservicio)();
+} servicio;
+
+
+/*
+ * Prototipos de las rutinas que realizan cada llamada al sistema
+ */
+int sis_crear_proceso();
+int sis_terminar_proceso();
+int sis_escribir();
+
+/*
+ * Variable global que contiene las rutinas que realizan cada llamada
+ */
+servicio tabla_servicios[NSERVICIOS]={	{sis_crear_proceso},
+					{sis_terminar_proceso},
+					{sis_escribir}};
+
+#endif /* _KERNEL_H */
+</file>
+
+<file path="minikernel/include/llamsis.h">
+/*
+ *  minikernel/kernel/include/llamsis.h
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ *
+ * Fichero de cabecera que contiene el numero asociado a cada llamada
+ *
+ * 	SE DEBE MODIFICAR PARA INCLUIR NUEVAS LLAMADAS
+ *
+ */
+
+#ifndef _LLAMSIS_H
+#define _LLAMSIS_H
+
+/* Numero de llamadas disponibles */
+#define NSERVICIOS 3
+
+#define CREAR_PROCESO 0
+#define TERMINAR_PROCESO 1
+#define ESCRIBIR 2
+
+#endif /* _LLAMSIS_H */
+</file>
+
+<file path="minikernel/kernel.c">
+/*
+ *  kernel/kernel.c
+ *
+ *  Minikernel. Versi�n 1.0
+ *
+ *  Fernando P�rez Costoya
+ *
+ */
+
+/*
+ *
+ * Fichero que contiene la funcionalidad del sistema operativo
+ *
+ */
+
+#include "kernel.h"	/* Contiene defs. usadas por este modulo */
+
+/*
+ *
+ * Funciones relacionadas con la tabla de procesos:
+ *	iniciar_tabla_proc buscar_BCP_libre
+ *
+ */
+
+/*
+ * Funci�n que inicia la tabla de procesos
+ */
+static void iniciar_tabla_proc(){
+	int i;
+
+	for (i=0; i<MAX_PROC; i++)
+		tabla_procs[i].estado=NO_USADA;
+}
+
+/*
+ * Funci�n que busca una entrada libre en la tabla de procesos
+ */
+static int buscar_BCP_libre(){
+	int i;
+
+	for (i=0; i<MAX_PROC; i++)
+		if (tabla_procs[i].estado==NO_USADA)
+			return i;
+	return -1;
+}
+
+/*
+ *
+ * Funciones que facilitan el manejo de las listas de BCPs
+ *	insertar_ultimo eliminar_primero eliminar_elem
+ *
+ * NOTA: PRIMERO SE DEBE LLAMAR A eliminar Y LUEGO A insertar
+ */
+
+/*
+ * Inserta un BCP al final de la lista.
+ */
+static void insertar_ultimo(lista_BCPs *lista, BCP * proc){
+	if (lista->primero==NULL)
+		lista->primero= proc;
+	else
+		lista->ultimo->siguiente=proc;
+	lista->ultimo= proc;
+	proc->siguiente=NULL;
+}
+
+/*
+ * Elimina el primer BCP de la lista.
+ */
+static void eliminar_primero(lista_BCPs *lista){
+
+	if (lista->ultimo==lista->primero)
+		lista->ultimo=NULL;
+	lista->primero=lista->primero->siguiente;
+}
+
+/*
+ * Elimina un determinado BCP de la lista.
+ */
+static void eliminar_elem(lista_BCPs *lista, BCP * proc){
+	BCP *paux=lista->primero;
+
+	if (paux==proc)
+		eliminar_primero(lista);
+	else {
+		for ( ; ((paux) && (paux->siguiente!=proc));
+			paux=paux->siguiente);
+		if (paux) {
+			if (lista->ultimo==paux->siguiente)
+				lista->ultimo=paux;
+			paux->siguiente=paux->siguiente->siguiente;
+		}
+	}
+}
+
+/*
+ *
+ * Funciones relacionadas con la planificacion
+ *	espera_int planificador
+ */
+
+/*
+ * Espera a que se produzca una interrupcion
+ */
+static void espera_int(){
+	int nivel;
+
+	printk("-> NO HAY LISTOS. ESPERA INT\n");
+
+	/* Baja al m�nimo el nivel de interrupci�n mientras espera */
+	nivel=fijar_nivel_int(NIVEL_1);
+	halt();
+	fijar_nivel_int(nivel);
+}
+
+/*
+ * Funci�n de planificacion que implementa un algoritmo FIFO.
+ */
+static BCP * planificador(){
+	while (lista_listos.primero==NULL)
+		espera_int();		/* No hay nada que hacer */
+	return lista_listos.primero;
+}
+
+/*
+ *
+ * Funcion auxiliar que termina proceso actual liberando sus recursos.
+ * Usada por llamada terminar_proceso y por rutinas que tratan excepciones
+ *
+ */
+static void liberar_proceso(){
+	BCP * p_proc_anterior;
+
+	liberar_imagen(p_proc_actual->info_mem); /* liberar mapa */
+
+	p_proc_actual->estado=TERMINADO;
+	eliminar_primero(&lista_listos); /* proc. fuera de listos */
+
+	/* Realizar cambio de contexto */
+	p_proc_anterior=p_proc_actual;
+	p_proc_actual=planificador();
+
+	printk("-> C.CONTEXTO POR FIN: de %d a %d\n",
+			p_proc_anterior->id, p_proc_actual->id);
+
+	liberar_pila(p_proc_anterior->pila);
+	cambio_contexto(NULL, &(p_proc_actual->contexto_regs));
+        return; /* no deber�a llegar aqui */
+}
+
+/*
+ *
+ * Funciones relacionadas con el tratamiento de interrupciones
+ *	excepciones: exc_arit exc_mem
+ *	interrupciones de reloj: int_reloj
+ *	interrupciones del terminal: int_terminal
+ *	llamadas al sistemas: llam_sis
+ *	interrupciones SW: int_sw
+ *
+ */
+
+/*
+ * Tratamiento de excepciones aritmeticas
+ */
+static void exc_arit(){
+
+	if (!viene_de_modo_usuario())
+		panico("excepcion aritmetica cuando estaba dentro del kernel");
+
+
+	printk("-> EXCEPCION ARITMETICA EN PROC %d\n", p_proc_actual->id);
+	liberar_proceso();
+
+        return; /* no deber�a llegar aqui */
+}
+
+/*
+ * Tratamiento de excepciones en el acceso a memoria
+ */
+static void exc_mem(){
+
+	if (!viene_de_modo_usuario())
+		panico("excepcion de memoria cuando estaba dentro del kernel");
+
+
+	printk("-> EXCEPCION DE MEMORIA EN PROC %d\n", p_proc_actual->id);
+	liberar_proceso();
+
+        return; /* no deber�a llegar aqui */
+}
+
+/*
+ * Tratamiento de interrupciones de terminal
+ */
+static void int_terminal(){
+	char car;
+
+	car = leer_puerto(DIR_TERMINAL);
+	printk("-> TRATANDO INT. DE TERMINAL %c\n", car);
+
+        return;
+}
+
+/*
+ * Tratamiento de interrupciones de reloj
+ */
+static void int_reloj(){
+
+	printk("-> TRATANDO INT. DE RELOJ\n");
+
+        return;
+}
+
+/*
+ * Tratamiento de llamadas al sistema
+ */
+static void tratar_llamsis(){
+	int nserv, res;
+
+	nserv=leer_registro(0);
+	if (nserv<NSERVICIOS)
+		res=(tabla_servicios[nserv].fservicio)();
+	else
+		res=-1;		/* servicio no existente */
+	escribir_registro(0,res);
+	return;
+}
+
+/*
+ * Tratamiento de interrupciuones software
+ */
+static void int_sw(){
+
+	printk("-> TRATANDO INT. SW\n");
+
+	return;
+}
+
+/*
+ *
+ * Funcion auxiliar que crea un proceso reservando sus recursos.
+ * Usada por llamada crear_proceso.
+ *
+ */
+static int crear_tarea(char *prog){
+	void * imagen, *pc_inicial;
+	int error=0;
+	int proc;
+	BCP *p_proc;
+
+	proc=buscar_BCP_libre();
+	if (proc==-1)
+		return -1;	/* no hay entrada libre */
+
+	/* A rellenar el BCP ... */
+	p_proc=&(tabla_procs[proc]);
+
+	/* crea la imagen de memoria leyendo ejecutable */
+	imagen=crear_imagen(prog, &pc_inicial);
+	if (imagen)
+	{
+		p_proc->info_mem=imagen;
+		p_proc->pila=crear_pila(TAM_PILA);
+		fijar_contexto_ini(p_proc->info_mem, p_proc->pila, TAM_PILA,
+			pc_inicial,
+			&(p_proc->contexto_regs));
+		p_proc->id=proc;
+		p_proc->estado=LISTO;
+
+		/* lo inserta al final de cola de listos */
+		insertar_ultimo(&lista_listos, p_proc);
+		error= 0;
+	}
+	else
+		error= -1; /* fallo al crear imagen */
+
+	return error;
+}
+
+/*
+ *
+ * Rutinas que llevan a cabo las llamadas al sistema
+ *	sis_crear_proceso sis_escribir
+ *
+ */
+
+/*
+ * Tratamiento de llamada al sistema crear_proceso. Llama a la
+ * funcion auxiliar crear_tarea sis_terminar_proceso
+ */
+int sis_crear_proceso(){
+	char *prog;
+	int res;
+
+	printk("-> PROC %d: CREAR PROCESO\n", p_proc_actual->id);
+	prog=(char *)leer_registro(1);
+	res=crear_tarea(prog);
+	return res;
+}
+
+/*
+ * Tratamiento de llamada al sistema escribir. Llama simplemente a la
+ * funcion de apoyo escribir_ker
+ */
+int sis_escribir()
+{
+	char *texto;
+	unsigned int longi;
+
+	texto=(char *)leer_registro(1);
+	longi=(unsigned int)leer_registro(2);
+
+	escribir_ker(texto, longi);
+	return 0;
+}
+
+/*
+ * Tratamiento de llamada al sistema terminar_proceso. Llama a la
+ * funcion auxiliar liberar_proceso
+ */
+int sis_terminar_proceso(){
+
+	printk("-> FIN PROCESO %d\n", p_proc_actual->id);
+
+	liberar_proceso();
+
+        return 0; /* no deber�a llegar aqui */
+}
+
+//meter aqui las llamadas a sistema!!
+
+
+/*
+ *
+ * Rutina de inicializaci�n invocada en arranque
+ *
+ */
+int main(){
+	/* se llega con las interrupciones prohibidas */
+
+	instal_man_int(EXC_ARITM, exc_arit); 
+	instal_man_int(EXC_MEM, exc_mem); 
+	instal_man_int(INT_RELOJ, int_reloj); 
+	instal_man_int(INT_TERMINAL, int_terminal); 
+	instal_man_int(LLAM_SIS, tratar_llamsis); 
+	instal_man_int(INT_SW, int_sw); 
+
+	iniciar_cont_int();		/* inicia cont. interr. */
+	iniciar_cont_reloj(TICK);	/* fija frecuencia del reloj */
+	iniciar_cont_teclado();		/* inici cont. teclado */
+
+	iniciar_tabla_proc();		/* inicia BCPs de tabla de procesos */
+
+	/* crea proceso inicial */
+	if (crear_tarea((void *)"init")<0)
+		panico("no encontrado el proceso inicial");
+	
+	/* activa proceso inicial */
+	p_proc_actual=planificador();
+	cambio_contexto(NULL, &(p_proc_actual->contexto_regs));
+	panico("S.O. reactivado inesperadamente");
+	return 0;
+}
+</file>
+
+<file path="minikernel/Makefile">
+#
+# minikernel/Makefile
+#	Makefile del sistema 
+#
+
+INCLUDEDIR=include
+CC=gcc
+CFLAGS=-g -Wall -fPIC -I$(INCLUDEDIR)
+
+all: version kernel
+
+version:
+	@ln -sf HAL.o_`getconf LONG_BIT` HAL.o
+
+
+OBJS_KER=kernel.o HAL.o 
+BIB_KER=-ldl
+
+kernel.o: $(INCLUDEDIR)/kernel.h $(INCLUDEDIR)/HAL.h $(INCLUDEDIR)/const.h $(INCLUDEDIR)/llamsis.h
+
+HAL.o: $(INCLUDEDIR)/HAL.h $(INCLUDEDIR)/const.h
+
+kernel: $(OBJS_KER)
+	$(CC) -shared -o $@ $(OBJS_KER) $(BIB_KER)
+
+clean:
+	rm -f kernel.o kernel HAL.o
+</file>
+
+<file path="usuario/include/servicios.h">
+/*
+ *  usuario/include/servicios.h
+ *
+ *  Minikernel. Versi�n 1.0
+ *
+ *  Fernando P�rez Costoya
+ *
+ */
+
+/*
+ *
+ * Fichero de cabecera que contiene los prototipos de funciones de
+ * biblioteca que proporcionan la interfaz de llamadas al sistema.
+ *
+ *      SE DEBE MODIFICAR AL INCLUIR NUEVAS LLAMADAS
+ *
+ */
+
+#ifndef SERVICIOS_H
+#define SERVICIOS_H
+
+/* Evita el uso del printf de la bilioteca est�ndar */
+#define printf escribirf
+
+/* Funcion de biblioteca */
+int escribirf(const char *formato, ...);
+
+/* Llamadas al sistema proporcionadas */
+int crear_proceso(char *prog);
+int terminar_proceso();
+int escribir(char *texto, unsigned int longi);
+//meter cabeceras nuevas
+
+#endif /* SERVICIOS_H */
+</file>
+
+<file path="usuario/lib/Makefile">
+#
+# usuario/lib/Makefile
+#	Makefile de la biblioteca
+#
+
+INCLUDEDIR=../include
+INCLUDEDIR2=../../minikernel/include
+
+CC=gcc
+CFLAGS=-Wall -g -fPIC -I$(INCLUDEDIR) -I$(INCLUDEDIR2)
+
+all: version libserv.a
+
+version:
+	@ln -sf misc.o_`getconf LONG_BIT` misc.o
+
+serv.o: $(INCLUDEDIR)/servicios.h $(INCLUDEDIR2)/llamsis.h
+
+libserv.a: serv.o misc.o
+	ar -r $@ serv.o misc.o
+
+clean:
+	rm -f serv.o libserv.a misc.o
+</file>
+
+<file path="usuario/lib/serv.c">
+/*
+ *  usuario/lib/serv.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ *
+ * Fichero que contiene las definiciones de las funciones de interfaz
+ * a las llamadas al sistema. Usa la funcion de apoyo llamsis
+ *
+ *      SE DEBE MODIFICAR AL INCLUIR NUEVAS LLAMADAS
+ *
+ */
+
+#include "llamsis.h"
+#include "servicios.h"
+
+/* Función del módulo "misc" que prepara el código de la llamada
+   (en el registro 0), los parámetros (en registros 1, 2, ...), realiza la
+   instruccion de llamada al sistema  y devuelve el resultado 
+   (que obtiene del registro 0) */
+
+int llamsis(int llamada, int nargs, ... /* args */);
+
+
+/*
+ *
+ * Funciones interfaz a las llamadas al sistema
+ *
+ */
+
+
+int crear_proceso(char *prog){
+	return llamsis(CREAR_PROCESO, 1, (long)prog);
+}
+int terminar_proceso(){
+	return llamsis(TERMINAR_PROCESO, 0);
+}
+int escribir(char *texto, unsigned int longi){
+	return llamsis(ESCRIBIR, 2, (long)texto, (long)longi);
+}
+</file>
+
+<file path="usuario/abridor.c">
+/*
+ * usuario/abridor.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que prueba la funcionalidad de las primitivas
+ * que crean, abren y cierran mutex
+ */
+
+#include "servicios.h"
+
+int main(){
+	int desc;
+
+	printf("abridor comienza\n");
+
+	/* abre mutex que no existe */
+	if (abrir_mutex("m0")<0)
+		printf("error abriendo m0. DEBE SALIR\n");
+
+	if ((desc=abrir_mutex("m1"))<0)
+		printf("error abriendo m1. NO DEBE SALIR\n");
+
+	if (abrir_mutex("m2")<0)
+		printf("error abriendo m2. NO DEBE SALIR\n");
+
+	if (abrir_mutex("m3")<0)
+		printf("error abriendo m3. NO DEBE SALIR\n");
+
+	if (abrir_mutex("m4")<0)
+		printf("error abriendo m4. NO DEBE SALIR\n");
+
+	/* Error: ha agotado los descriptores */
+	if (abrir_mutex("m5")<0)
+		printf("error abriendo m5. DEBE SALIR\n");
+
+	/* libera un descriptor de mutex (m1) */
+	cerrar_mutex(desc);
+
+	/* Agotado num mutex del sistema. Debe bloquearse */
+	if (crear_mutex("m17", 0)<0)
+		printf("error creando m17. NO DEBE SALIR\n");
+	/* se desbloqueará cuando se elimine m1 */
+
+	/* intenta crear el mismo mutex: devuelve un error porque ya existe */
+	if (crear_mutex("m17", 0)<0)
+		printf("error creando m17. DEBE SALIR\n");
+
+	printf("abridor termina\n");
+	return 0;
+}
+</file>
+
+<file path="usuario/creador1.c">
+/*
+ * usuario/creador1.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que crea mutex.
+ */
+
+#include "servicios.h"
+
+int main(){
+
+	printf("creador1 comienza\n");
+
+	if (crear_mutex("m1", NO_RECURSIVO)<0)
+		printf("error creando m1. NO DEBE SALIR\n");
+
+	if (crear_mutex("m1", NO_RECURSIVO)<0)
+		printf("error creando m1. DEBE SALIR\n");
+
+	if (crear_mutex("m2", NO_RECURSIVO)<0)
+		printf("error creando m2. NO DEBE SALIR\n");
+
+	if (crear_mutex("m3", NO_RECURSIVO)<0)
+		printf("error creando m3. NO DEBE SALIR\n");
+
+	if (crear_mutex("m4", NO_RECURSIVO)<0)
+		printf("error creando m4. NO DEBE SALIR\n");
+
+	printf("creador1 duerme 1 segundo\n");
+	dormir(1);
+
+	printf("creador1 termina\n");
+
+	/* cierre implícito de mutex */
+	return 0;
+}
+</file>
+
+<file path="usuario/creador2.c">
+/*
+ * usuario/creador2.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que crea mutex.
+ */
+
+#include "servicios.h"
+
+int main(){
+
+	printf("creador2 comienza\n");
+
+	if (crear_mutex("m5", NO_RECURSIVO)<0)
+		printf("error creando m5. NO DEBE SALIR\n");
+
+	if (crear_mutex("m6", NO_RECURSIVO)<0)
+		printf("error creando m6. NO DEBE SALIR\n");
+
+	if (crear_mutex("m7", NO_RECURSIVO)<0)
+		printf("error creando m7. NO DEBE SALIR\n");
+
+	if (crear_mutex("m8", NO_RECURSIVO)<0)
+		printf("error creando m8. NO DEBE SALIR\n");
+
+	printf("creador2 duerme 1 segundo\n");
+	dormir(1);
+
+	printf("creador2 termina\n");
+
+        /* cierre implícito de mutex */
+
+	return 0;
+}
+</file>
+
+<file path="usuario/creador3.c">
+/*
+ * usuario/creador3.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que crea mutex.
+ */
+
+#include "servicios.h"
+
+int main(){
+
+	printf("creador3 comienza\n");
+
+	if (crear_mutex("m9", NO_RECURSIVO)<0)
+		printf("error creando m9. NO DEBE SALIR\n");
+
+	if (crear_mutex("m10", NO_RECURSIVO)<0)
+		printf("error creando m10. NO DEBE SALIR\n");
+
+	if (crear_mutex("m11", NO_RECURSIVO)<0)
+		printf("error creando m11. NO DEBE SALIR\n");
+
+	if (crear_mutex("m12", NO_RECURSIVO)<0)
+		printf("error creando m12. NO DEBE SALIR\n");
+
+	printf("creador3 duerme 1 segundo\n");
+	dormir(1);
+
+	printf("creador3 termina\n");
+
+        /* cierre implícito de mutex */
+
+	return 0;
+}
+</file>
+
+<file path="usuario/creador4.c">
+/*
+ * usuario/creador4.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que crea mutex.
+ */
+
+#include "servicios.h"
+
+int main(){
+
+	printf("creador4 comienza\n");
+
+	if (crear_mutex("m13", NO_RECURSIVO)<0)
+		printf("error creando m13. NO DEBE SALIR\n");
+
+	if (crear_mutex("m14", NO_RECURSIVO)<0)
+		printf("error creando m14. NO DEBE SALIR\n");
+
+	if (crear_mutex("m15", NO_RECURSIVO)<0)
+		printf("error creando m15. NO DEBE SALIR\n");
+
+	if (crear_mutex("m16", NO_RECURSIVO)<0)
+		printf("error creando m16. NO DEBE SALIR\n");
+
+	printf("creador4 duerme 1 segundo\n");
+	dormir(1);
+
+	printf("creador4 termina\n");
+
+        /* cierre implícito de mutex */
+
+	return 0;
+}
+</file>
+
+<file path="usuario/dormilon.c">
+/*
+ * usuario/dormilon.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que duerme dos veces.
+ */
+
+#include "servicios.h"
+
+int main(){
+	int segs, id;
+
+	id=obtener_id_pr();
+	printf("dormilon (%d): comienza\n", id);
+
+	/* primero duerme 1 segundo */
+	printf("dormilon (%d) duerme 1 segundo\n", id);
+	dormir(1);
+
+	/* despues duerme numero de segundos dependiendo de su pid */
+	segs=id+1;
+	printf("dormilon (%d) duerme %d segundos\n", id, segs);
+	dormir(segs);
+
+	printf("dormilon (%d): termina\n", id);
+	return 0;
+}
+</file>
+
+<file path="usuario/excep_arit.c">
+/*
+ * usuario/excep_arit.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que fuerza una excepción aritmética
+ */
+
+#include "servicios.h"
+
+#define TOT_ITER 200	/* número total de iteraciones */
+#define ITER_EXCEP 22	/* iteración en la que causa excepción */
+
+int tot=0;
+
+int main(){
+	int i;
+	int tot=0;
+
+	for (i=0; i<TOT_ITER; i++){
+		printf("excep_arit: i %d \n", i);
+
+		/* Forzando una excepción */
+		if ((i+1)%ITER_EXCEP==0)
+			i/=tot;
+	}
+	/* No debería llegar ya que ha generado una excepción */
+	printf("excep_arit: termina\n");
+	return 0;
+}
+</file>
+
+<file path="usuario/excep_mem.c">
+/*
+ * usuario/excep_mem.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que fuerza una excepción en acceso a memoria.
+ * Además crea un proceso hijo (simplon).
+ */
+
+#include "servicios.h"
+
+#define TOT_ITER 200	/* Número total de iteraciones */
+#define ITER_EXCEP 20	/* iteración en la que causa excepción */
+
+int main(){
+	int i;
+	int *p=0;
+
+	if (crear_proceso("simplon")<0)
+		printf("Error creando simplon\n");
+
+	for (i=0; i<TOT_ITER; i++){
+		printf("excep_mem: i %d\n", i);
+		if ((i+1)%ITER_EXCEP==0)
+			*p=5;
+	}
+	printf("excep_mem: termina\n");
+	terminar_proceso();
+	return 0; /* No se debería llegar a este punto */
+}
+</file>
+
+<file path="usuario/init.c">
+/*
+ * usuario/init.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/* Programa inicial que arranca el S.O. Sólo se ejecutarán los programas
+   que se incluyan aquí, que, evidentemente, pueden ejecutar otros
+   programas...
+*/
+
+/*
+ *
+ * Contiene las mismas pruebas que se realizan para evaluar la práctica.
+ * Para llevar a cabo cada prueba, comente y descomente
+ * las líneas correspondientes. En la versión inicial, la parte descomentada
+ * se corresponde con funcionalidad ya implementada en el material de apoyo.
+ *
+ */
+
+#include "servicios.h"
+
+int main(){
+
+	printf("init: comienza\n");
+
+/* EJEMPLO DE PRUEBA INICIAL QUE YA FUNCIONA PUESTO QUE CORRESPONDE CON LA
+FUNCIONALIDAD YA IMPLEMENTADA EN EL MATERIAL DE APOYO. UNA VEZ QUE IMPLEMENTE
+ALGO COMENTE ESTA PARTE Y DESCOMENTE LA PRUEBA CORRESPONDIENTE */
+
+	if (crear_proceso("simplon")<0)
+                printf("Error creando simplon\n");
+
+	if (crear_proceso("excep_arit")<0)
+		printf("Error creando excep_arit\n");
+
+	if (crear_proceso("excep_mem")<0)
+		printf("Error creando excep_mem\n");
+	
+	if (crear_proceso("noexiste")<0)
+		printf("Error creando noexiste\n");
+
+/* FIN PRUEBA INICIAL */
+
+/* PRUEBA DE LA LLAMADA OBTENER_ID_PR
+{
+        int i;
+        for (i=1; i<=2; i++)
+                if (crear_proceso("yosoy")<0)
+                        printf("Error creando yosoy\n");
+}
+*/
+
+/* PRUEBA DE LA LLAMADA DORMIR
+	if (crear_proceso("prueba_dormir")<0)
+		printf("Error creando prueba_dormir\n");
+*/
+
+/* PRIMERA PRUEBA DE MUTEX
+	if (crear_proceso("prueba_mutex1")<0)
+		printf("Error creando prueba_mutex1\n");
+*/
+
+/* SEGUNDA PRUEBA DE MUTEX
+	if (crear_proceso("prueba_mutex2")<0)
+		printf("Error creando prueba_mutex2\n");
+*/
+
+/* PRIMERA PRUEBA DE ROUND-ROBIN
+	if (crear_proceso("prueba_RR1")<0)
+		printf("Error creando prueba_RR1\n");
+*/
+
+/* SEGUNDA PRUEBA DE ROUND-ROBIN
+	if (crear_proceso("prueba_RR2")<0)
+		printf("Error creando prueba_RR2\n");
+*/
+
+/* PRUEBA DEL TERMINAL
+	if (crear_proceso("prueba_term")<0)
+		printf("Error creando prueba_term\n");
+*/
+
+	printf("init: termina\n");
+	return 0; 
+}
+</file>
+
+<file path="usuario/lector.c">
+/*
+ * usuario/lector.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que lee 11 caracteres del teclado.
+ */
+
+#include "servicios.h"
+
+int main(){
+	int car, id, i;
+
+	id=obtener_id_pr();
+	printf("lector (%d): comienza\n", id);
+
+	printf("lector (%d): pulsa caracteres a partir de ahora\n", id);
+	car=leer_caracter();
+	printf("lector (%d): has pulsado %c\n", id, car);
+
+	/* ahora duerme 3 segundos.*/
+	printf("lector (%d) duerme 3 segundos\n", id);
+	dormir(3);
+
+	for (i=1; i<=10; i++) {
+		car=leer_caracter();
+		printf("lector (%d): has pulsado %c\n", id, car);
+	}
+
+	printf("lector (%d): termina\n", id);
+	return 0;
+}
+</file>
+
+<file path="usuario/Makefile">
+#
+# usuario/Makefile
+#	Makefile de programas de usuario
+#
+# NOTA: EN LA VERSIÓN INICIAL SÓLO COMPILARÁN CORRECTAMENTE LOS PROGRAMAS
+# init, excep_arit, excep_mem y simplon, YA QUE LOS DEMÁS USAN LLAMADAS QUE
+# NO TIENE QUE IMPLEMENTAR EL ALUMNO 
+#
+
+
+MAKEFLAGS=-k
+INCLUDEDIR=include
+LIBDIR=lib
+
+BIBLIOTECA=$(LIBDIR)/libserv.a
+
+CC=cc
+CFLAGS=-Wall -fPIC -Werror -g -I$(INCLUDEDIR)
+
+PROGRAMAS=init excep_arit excep_mem simplon prueba_dormir dormilon prueba_mutex1 creador1 creador2 creador3 creador4 abridor prueba_mutex2 mutex1 mutex2 prueba_RR1 yosoy prueba_RR2 mudo prueba_term lector
+
+all: biblioteca $(PROGRAMAS)
+
+biblioteca:
+	cd lib; make
+
+init.o: $(INCLUDEDIR)/servicios.h
+init: init.o $(BIBLIOTECA)
+	$(CC) -shared -o $@ init.o -L$(LIBDIR) -lserv
+
+excep_arit.o: $(INCLUDEDIR)/servicios.h
+excep_arit: excep_arit.o $(BIBLIOTECA)
+	$(CC) -shared -o $@ excep_arit.o -L$(LIBDIR)  -lserv 
+
+excep_mem.o: $(INCLUDEDIR)/servicios.h
+excep_mem: excep_mem.o $(BIBLIOTECA)
+	$(CC) -shared -o $@ excep_mem.o -L$(LIBDIR) -lserv 
+
+simplon.o: $(INCLUDEDIR)/servicios.h
+simplon: simplon.o $(BIBLIOTECA)
+	$(CC) -shared -o $@ simplon.o -L$(LIBDIR) -lserv 
+
+prueba_dormir.o: $(INCLUDEDIR)/servicios.h
+prueba_dormir: prueba_dormir.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ prueba_dormir.o -L$(LIBDIR) -lserv
+
+dormilon.o: $(INCLUDEDIR)/servicios.h
+dormilon: dormilon.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ dormilon.o -L$(LIBDIR) -lserv
+
+prueba_mutex1.o: $(INCLUDEDIR)/servicios.h
+prueba_mutex1: prueba_mutex1.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ prueba_mutex1.o -L$(LIBDIR) -lserv
+
+creador1.o: $(INCLUDEDIR)/servicios.h
+creador1: creador1.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ creador1.o -L$(LIBDIR) -lserv
+
+creador2.o: $(INCLUDEDIR)/servicios.h
+creador2: creador2.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ creador2.o -L$(LIBDIR) -lserv
+
+creador3.o: $(INCLUDEDIR)/servicios.h
+creador3: creador3.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ creador3.o -L$(LIBDIR) -lserv
+
+creador4.o: $(INCLUDEDIR)/servicios.h
+creador4: creador4.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ creador4.o -L$(LIBDIR) -lserv
+
+abridor.o: $(INCLUDEDIR)/servicios.h
+abridor: abridor.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ abridor.o -L$(LIBDIR) -lserv
+
+prueba_mutex2.o: $(INCLUDEDIR)/servicios.h
+prueba_mutex2: prueba_mutex2.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ prueba_mutex2.o -L$(LIBDIR) -lserv
+
+mutex1.o: $(INCLUDEDIR)/servicios.h
+mutex1: mutex1.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ mutex1.o -L$(LIBDIR) -lserv
+
+mutex2.o: $(INCLUDEDIR)/servicios.h
+mutex2: mutex2.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ mutex2.o -L$(LIBDIR) -lserv
+
+prueba_RR1.o: $(INCLUDEDIR)/servicios.h
+prueba_RR1: prueba_RR1.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ prueba_RR1.o -L$(LIBDIR) -lserv
+
+yosoy.o: $(INCLUDEDIR)/servicios.h
+yosoy: yosoy.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ yosoy.o -L$(LIBDIR) -lserv
+
+prueba_RR2.o: $(INCLUDEDIR)/servicios.h
+prueba_RR2: prueba_RR2.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ prueba_RR2.o -L$(LIBDIR) -lserv
+
+mudo.o: $(INCLUDEDIR)/servicios.h
+mudo: mudo.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ mudo.o -L$(LIBDIR) -lserv
+
+prueba_term.o: $(INCLUDEDIR)/servicios.h
+prueba_term: prueba_term.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ prueba_term.o -L$(LIBDIR) -lserv
+
+lector.o: $(INCLUDEDIR)/servicios.h
+lector: lector.o $(BIBLIOTECA)
+	$(CC) $(LDFLAGS) -shared -o $@ lector.o -L$(LIBDIR) -lserv
+
+clean:
+	rm -f *.o $(PROGRAMAS)
+	cd lib; make clean
+</file>
+
+<file path="usuario/mudo.c">
+/*
+ * usuario/mudo.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que "gasta CPU".
+ */
+
+#include "servicios.h"
+
+#define TOT_ITER 20000000	/* ponga las que considere oportuno */
+
+int main(){
+	int i, tot;
+	int j=5;
+
+	for (i=0; i<TOT_ITER; i++)
+		tot=j*i;
+	printf("mudo (%d): termina con %d\n", obtener_id_pr(), tot);
+	return 0;
+}
+</file>
+
+<file path="usuario/mutex1.c">
+/*
+ * usuario/mutex1.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que forma parte de una prueba de los mutex
+ *
+ */
+
+#include "servicios.h"
+
+int main(){
+	int desc;
+
+	printf("mutex1 comienza\n");
+
+	if ((desc=abrir_mutex("m2"))<0)
+		printf("error abriendo m2. NO DEBE APARECER\n");
+
+	if (lock(desc)<0)
+		printf("error en lock de mutex. NO DEBE APARECER\n");
+
+	/* segundo lock sobre semáforo recursivo -> correcto */
+	if (lock(desc)<0)
+		printf("error en lock de mutex. NO DEBE APARECER\n");
+
+	printf("mutex1 duerme 2 segs.: no debe ejecutar ningún proceso, ya que prueba_mutex está dormido y mutex2 bloqueado en mutex m1\n");
+	dormir(2);
+
+	/* cierre de semáforo: debe despertar a mutex2 */
+	if (cerrar_mutex(desc)<0)
+		printf("error al cerrar mutex. NO DEBE APARECER\n");
+
+	printf("mutex1 duerme 1 seg.: debe ejecutar mutex2 ya que cierre de m2 debe desbloquearlo\n");
+	dormir(1);
+
+	printf("mutex1 termina\n");
+
+	return 0;
+}
+</file>
+
+<file path="usuario/mutex2.c">
+/*
+ * usuario/mutex2.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que forma parte de una prueba de los mutex
+ *
+ */
+
+#include "servicios.h"
+
+int main(){
+	int desc1, desc2;
+
+	printf("mutex2 comienza\n");
+
+	if ((desc1=abrir_mutex("m1"))<0)
+		printf("error abriendo m1. NO DEBE APARECER\n");
+
+	if ((desc2=abrir_mutex("m2"))<0)
+		printf("error abriendo m2. NO DEBE APARECER\n");
+
+	if (lock(desc1)<0)
+		printf("error en lock de mutex. NO DEBE APARECER\n");
+
+	printf("mutex2 ha obtenido mutex m1, se bloqueará a continuación al intentar obtener m2\n");
+
+	if (lock(desc2)<0)
+		printf("error en lock de mutex. NO DEBE APARECER\n");
+
+
+	printf("mutex2 ha obtenido mutex m2\n");
+
+	if (unlock(desc2)<0)
+		printf("error en unlock de mutex. NO DEBE APARECER\n");
+
+	if (unlock(desc1)<0)
+		printf("error en unlock de mutex. NO DEBE APARECER\n");
+
+
+	printf("mutex2 termina\n");
+
+	return 0;
+}
+</file>
+
+<file path="usuario/prueba_dormir.c">
+/*
+ * usuario/prueba_dormir.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que realiza una prueba de la llamada dormir
+ */
+
+#include "servicios.h"
+
+int main(){
+
+	printf("prueba_dormir: comienza\n");
+
+	if (crear_proceso("dormilon")<0)
+		printf("Error creando dormilon\n");
+	
+	if (crear_proceso("dormilon")<0)
+		printf("Error creando dormilon\n");
+
+	printf("prueba_dormir: termina\n");
+	return 0; 
+}
+</file>
+
+<file path="usuario/prueba_mutex1.c">
+/*
+ * usuario/prueba_mutex1.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que realiza una prueba de las llamadas crear,
+ * abrir y cerrar de mutex
+ */
+
+#include "servicios.h"
+
+int main(){
+
+
+	printf("prueba_mutex1: comienza\n");
+
+	if (crear_proceso("creador1")<0)
+		printf("Error creando creador1\n");
+	
+	if (crear_proceso("creador2")<0)
+		printf("Error creando creador2\n");
+	
+	if (crear_proceso("creador3")<0)
+		printf("Error creando creador3\n");
+	
+	if (crear_proceso("creador4")<0)
+		printf("Error creando creador4\n");
+	
+	if (crear_proceso("abridor")<0)
+		printf("Error creando abridor\n");
+
+	printf("prueba_mutex1: termina\n");
+	return 0; 
+}
+</file>
+
+<file path="usuario/prueba_mutex2.c">
+/*
+ * usuario/prueba_mutex.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que realiza una prueba de los mutex
+ *
+ */
+
+#include "servicios.h"
+
+int main(){
+	int desc1, desc2;
+
+	printf("prueba_mutex comienza\n");
+
+	if ((desc1=crear_mutex("m1", NO_RECURSIVO))<0)
+		printf("error creando m1. NO DEBE APARECER\n");
+
+	/* Probamos a bloquear un mutex usando un descriptor erróneo */
+	if (lock(desc1+1)<0)
+		printf("error en lock de mutex. DEBE APARECER\n");
+
+	if ((desc2=crear_mutex("m2", RECURSIVO))<0)
+		printf("error creando m2. NO DEBE APARECER\n");
+
+	if (lock(desc1)<0)
+		printf("error en lock de mutex. NO DEBE APARECER\n");
+
+	/* segundo lock sobre semáforo no recursivo -> error */
+	if (lock(desc1)<0)
+		printf("segundo lock en mutex no recursivo. DEBE APARECER\n");
+
+	if (lock(desc2)<0)
+		printf("error en lock de mutex. NO DEBE APARECER\n");
+
+	/* segundo lock sobre semáforo recursivo -> correcto */
+	if (lock(desc2)<0)
+		printf("error en lock de mutex. NO DEBE APARECER\n");
+
+	if (crear_proceso("mutex1")<0)
+		printf("Error creando mutex1\n");
+
+	if (crear_proceso("mutex2")<0)
+		printf("Error creando mutex2\n");
+
+	printf("prueba_mutex duerme 1 seg.: ejecutarán los procesos mutex1 y mutex2 que se bloquearán en lock de mutex\n");
+	dormir(1);
+
+	/* No debe despertar a nadie */
+	if (unlock(desc2)<0)
+		printf("error en unlock de mutex. NO DEBE APARECER\n");
+
+	printf("prueba_mutex duerme 1 seg.: no ejecutará ningún proceso ya que los mutex están bloqueados\n");
+	dormir(1);
+
+	/* Debe despertar al proceso mutex1 */
+	if (unlock(desc2)<0)
+		printf("error en unlock de mutex. NO DEBE APARECER\n");
+
+	printf("prueba_mutex duerme 1 seg.: debe ejecutar mutex1 ya que se ha liberado el mutex m2\n");
+	dormir(1);
+
+	printf("prueba_mutex termina: debe ejecutar mutex2 ya que el cierre implícito de m1 debe despertarlo y mutex1 está dormido\n");
+
+	/* cierre implícito de semáforos: debe despertar a mutex2 */
+	return 0;
+}
+</file>
+
+<file path="usuario/prueba_RR1.c">
+/*
+ * usuario/prueba_RR1.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que realiza una prueba del round-robin usando
+ * procesos que hacen muchas llamadas al sistema.
+ */
+
+#include "servicios.h"
+
+int main(){
+	int i;
+
+	printf("prueba_RR1: comienza\n");
+
+	for (i=1; i<=5; i++)
+		if (crear_proceso("yosoy")<0)
+			printf("Error creando yosoy\n");
+	
+
+	printf("prueba_RR1: termina\n");
+	return 0; 
+}
+</file>
+
+<file path="usuario/prueba_RR2.c">
+/*
+ * usuario/prueba_RR2.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que realiza una prueba del round-robin usando
+ * procesos que no hacen llamadas al sistema.
+ */
+
+#include "servicios.h"
+
+int main(){
+	int i;
+
+	printf("prueba_RR2: comienza\n");
+
+	for (i=1; i<=5; i++)
+		if (crear_proceso("mudo")<0)
+			printf("Error creando mudo\n");
+	
+
+	printf("prueba_RR2: termina\n");
+	return 0; 
+}
+</file>
+
+<file path="usuario/prueba_term.c">
+/*
+ * usuario/prueba_term.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que realiza una prueba del terminal
+ */
+
+#include "servicios.h"
+
+int main(){
+	int i;
+
+	printf("prueba_term: comienza\n");
+
+	for (i=1; i<=2; i++)
+		if (crear_proceso("lector")<0)
+			printf("Error creando lector\n");
+	
+
+	printf("prueba_term: termina\n");
+	return 0; 
+}
+</file>
+
+<file path="usuario/simplon.c">
+/*
+ * usuario/simplon.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que simplemente imprime un valor entero
+ */
+
+#include "servicios.h"
+
+#define TOT_ITER 200 /* ponga las que considere oportuno */
+
+int main(){
+	int i;
+
+	for (i=0; i<TOT_ITER; i++)
+		printf("simplon: i %d\n", i);
+
+	printf("simplon: termina\n");
+	return 0;
+}
+</file>
+
+<file path="usuario/yosoy.c">
+/*
+ * usuario/yosoy.c
+ *
+ *  Minikernel. Versión 1.0
+ *
+ *  Fernando Pérez Costoya
+ *
+ */
+
+/*
+ * Programa de usuario que simplemente imprime su identificador
+ */
+
+#include "servicios.h"
+
+#define TOT_ITER 50000	/* ponga las que considere oportuno */
+
+int main(){
+	int i, id;
+
+	id=obtener_id_pr();
+	for (i=0; i<TOT_ITER; i++)
+		printf("yosoy (%d): i %d\n", id, i);
+	printf("yosoy (%d): termina\n", id);
+	return 0;
+}
+</file>
+
+<file path=".gitignore">
+# Ignorar metadatos basura de Windows
+*:Zone.Identifier
+
+# Ignorar archivos objeto intermedios de compilación
+*.o
+
+# Ignorar las bibliotecas compiladas de usuario
+*.a
+
+# Ignorar el ejecutable final del sistema operativo
+minikernel/kernel
+</file>
+
+<file path="Makefile">
+#
+# Makefile
+# 	Makefile global del sistema
+#
+all: arranque sistema programas
+
+arranque:
+	@cd boot; make
+
+sistema:
+	cd minikernel; make
+
+programas:
+	cd usuario; make
+
+clean:
+	@cd boot; make clean
+	cd minikernel; make clean
+	cd usuario; make clean
+</file>
+
+</files>
