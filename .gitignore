@@ -1,0 +1,11 @@
+# Ignorar metadatos basura de Windows
+*:Zone.Identifier
+
+# Ignorar archivos objeto intermedios de compilación
+*.o
+
+# Ignorar las bibliotecas compiladas de usuario
+*.a
+
+# Ignorar el ejecutable final del sistema operativo
+minikernel/kernel
