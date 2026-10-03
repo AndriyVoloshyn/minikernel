@@ -280,7 +280,7 @@ static int crear_tarea(char *prog){
 /*
  *
  * Rutinas que llevan a cabo las llamadas al sistema
- *	sis_crear_proceso sis_escribir
+ *	sis_crear_proceso sis_escribir sis_obtener_id_pr
  *
  */
 
@@ -328,7 +328,13 @@ int sis_terminar_proceso(){
 }
 
 //meter aqui las llamadas a sistema!!
-
+/*
+ * Tratamiento de llamada al sistema obtener_id_pr. Devuelve el
+ * identifcador del proceso en ejeciución
+ */
+int sis_obtener_id_pr(){
+	return p_proc_actual->id;
+}
 
 /*
  *

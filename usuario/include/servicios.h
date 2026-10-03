@@ -29,6 +29,7 @@ int escribirf(const char *formato, ...);
 int crear_proceso(char *prog);
 int terminar_proceso();
 int escribir(char *texto, unsigned int longi);
+int obtener_id_pr();
 //meter cabeceras nuevas
 
 #endif /* SERVICIOS_H */
