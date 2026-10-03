@@ -204,11 +204,41 @@ static void int_terminal(){
 /*
  * Tratamiento de interrupciones de reloj
  */
+/*
+ * Tratamiento de interrupciones de reloj
+ */
 static void int_reloj(){
+    BCP *actual;
+    BCP *siguiente;
 
-	printk("-> TRATANDO INT. DE RELOJ\n");
+    /* Recorremos la lista de procesos bloqueados por reloj */
+    actual = lista_bloqueados_reloj.primero;
 
-        return;
+    while (actual != NULL) {
+        /* Guardamos el puntero al siguiente BCP antes de que 'actual' 
+           pueda ser modificado o extraído de la lista */
+        siguiente = actual->siguiente;
+
+        /* Decrementamos los ticks restantes del proceso */
+        actual->ticks_restantes--;
+
+        /* Si el plazo ha expirado, despertamos al proceso */
+        if (actual->ticks_restantes <= 0) {
+            /* 1. Lo quitamos de la cola de dormidos */
+            eliminar_elem(&lista_bloqueados_reloj, actual);
+
+            /* 2. Cambiamos su estado a LISTO */
+            actual->estado = LISTO;
+
+            /* 3. Lo añadimos al final de la cola de listos */
+            insertar_ultimo(&lista_listos, actual);
+        }
+
+        /* Avanzamos al siguiente elemento */
+        actual = siguiente;
+    }
+
+    return;
 }
 
 /*

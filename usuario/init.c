@@ -45,19 +45,19 @@ ALGO COMENTE ESTA PARTE Y DESCOMENTE LA PRUEBA CORRESPONDIENTE */
 
 /* FIN PRUEBA INICIAL */
 
-/* PRUEBA DE LA LLAMADA OBTENER_ID_PR */
+/* PRUEBA DE LA LLAMADA OBTENER_ID_PR 
 {
         int i;
         for (i=1; i<=2; i++)
                 if (crear_proceso("yosoy")<0)
                         printf("Error creando yosoy\n");
-}
+}*/
 
 
-/* PRUEBA DE LA LLAMADA DORMIR
+/* PRUEBA DE LA LLAMADA DORMIR*/
 	if (crear_proceso("prueba_dormir")<0)
 		printf("Error creando prueba_dormir\n");
-*/
+
 
 /* PRIMERA PRUEBA DE MUTEX
 	if (crear_proceso("prueba_mutex1")<0)
