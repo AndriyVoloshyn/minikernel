@@ -130,10 +130,14 @@ static BCP * planificador(){
  */
 static void liberar_proceso(){
 	BCP * p_proc_anterior;
+	int nivel_previo;
 
 	liberar_imagen(p_proc_actual->info_mem); /* liberar mapa */
 
 	p_proc_actual->estado=TERMINADO;
+
+	/* SECCION CRITICA: eliminar de listos y planificar nuevo proceso */
+	nivel_previo = fijar_nivel_int(NIVEL_3);
 	eliminar_primero(&lista_listos); /* proc. fuera de listos */
 
 	/* Realizar cambio de contexto */
@@ -143,9 +147,11 @@ static void liberar_proceso(){
 	printk("-> C.CONTEXTO POR FIN: de %d a %d\n",
 			p_proc_anterior->id, p_proc_actual->id);
 
+	fijar_nivel_int(nivel_previo);
+
 	liberar_pila(p_proc_anterior->pila);
 	cambio_contexto(NULL, &(p_proc_actual->contexto_regs));
-        return; /* no deber�a llegar aqui */
+        return; /* no debería llegar aqui */
 }
 
 /*
@@ -277,6 +283,7 @@ static int crear_tarea(char *prog){
 	int error=0;
 	int proc;
 	BCP *p_proc;
+	int nivel_previo; /* Añadir variable para guardar el nivel */
 
 	proc=buscar_BCP_libre();
 	if (proc==-1)
@@ -297,8 +304,11 @@ static int crear_tarea(char *prog){
 		p_proc->id=proc;
 		p_proc->estado=LISTO;
 
-		/* lo inserta al final de cola de listos */
+		/* SECCION CRITICA: proteger manipulacion de lista_listos */
+		nivel_previo = fijar_nivel_int(NIVEL_3);
 		insertar_ultimo(&lista_listos, p_proc);
+		fijar_nivel_int(nivel_previo);
+
 		error= 0;
 	}
 	else
