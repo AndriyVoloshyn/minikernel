@@ -68,29 +68,20 @@ usuario/
   creador3.c
   creador4.c
   dormilon.c
-  excep_arit
   excep_arit.c
-  excep_mem
   excep_mem.c
-  init
   init.c
   lector.c
   Makefile
   mudo.c
   mutex1.c
   mutex2.c
-  prueba_dormir
   prueba_dormir.c
-  prueba_mutex1
   prueba_mutex1.c
   prueba_mutex2.c
-  prueba_RR1
   prueba_RR1.c
-  prueba_RR2
   prueba_RR2.c
-  prueba_term
   prueba_term.c
-  simplon
   simplon.c
   yosoy.c
 .gitignore
@@ -353,504 +344,6 @@ int printk(const char *, ...); /* escribe en pantalla con formato */
 #endif /* _HAL_H */
 </file>
 
-<file path="minikernel/include/kernel.h">
-/*
- *  minikernel/include/kernel.h
- *
- *  Minikernel. Versión 1.0
- *
- *  Fernando Pérez Costoya
- *
- */
-
-/*
- *
- * Fichero de cabecera que contiene definiciones usadas por kernel.c
- *
- *      SE DEBE MODIFICAR PARA INCLUIR NUEVA FUNCIONALIDAD
- *
- */
-
-#ifndef _KERNEL_H
-#define _KERNEL_H
-
-#include "const.h"
-#include "HAL.h"
-#include "llamsis.h"
-
-/*
- *
- * Definicion del tipo que corresponde con el BCP.
- * Se va a modificar al incluir la funcionalidad pedida.
- *
- */
-typedef struct BCP_t *BCPptr;
-
-typedef struct BCP_t {
-        int id;				/* ident. del proceso */
-        int estado;			/* TERMINADO|LISTO|EJECUCION|BLOQUEADO*/
-        contexto_t contexto_regs;	/* copia de regs. de UCP */
-        void * pila;			/* dir. inicial de la pila */
-	BCPptr siguiente;		/* puntero a otro BCP */
-	void *info_mem;			/* descriptor del mapa de memoria */
-} BCP;
-
-/*
- *
- * Definicion del tipo que corresponde con la cabecera de una lista
- * de BCPs. Este tipo se puede usar para diversas listas (procesos listos,
- * procesos bloqueados en semáforo, etc.).
- *
- */
-
-typedef struct{
-	BCP *primero;
-	BCP *ultimo;
-} lista_BCPs;
-
-
-/*
- * Variable global que identifica el proceso actual
- */
-
-BCP * p_proc_actual=NULL;
-
-/*
- * Variable global que representa la tabla de procesos
- */
-
-BCP tabla_procs[MAX_PROC];
-
-/*
- * Variable global que representa la cola de procesos listos
- */
-lista_BCPs lista_listos= {NULL, NULL};
-
-/*
- *
- * Definición del tipo que corresponde con una entrada en la tabla de
- * llamadas al sistema.
- *
- */
-typedef struct{
-	int (*fservicio)();
-} servicio;
-
-
-/*
- * Prototipos de las rutinas que realizan cada llamada al sistema
- */
-int sis_crear_proceso();
-int sis_terminar_proceso();
-int sis_escribir();
-
-/*
- * Variable global que contiene las rutinas que realizan cada llamada
- */
-servicio tabla_servicios[NSERVICIOS]={	{sis_crear_proceso},
-					{sis_terminar_proceso},
-					{sis_escribir}};
-
-#endif /* _KERNEL_H */
-</file>
-
-<file path="minikernel/include/llamsis.h">
-/*
- *  minikernel/kernel/include/llamsis.h
- *
- *  Minikernel. Versión 1.0
- *
- *  Fernando Pérez Costoya
- *
- */
-
-/*
- *
- * Fichero de cabecera que contiene el numero asociado a cada llamada
- *
- * 	SE DEBE MODIFICAR PARA INCLUIR NUEVAS LLAMADAS
- *
- */
-
-#ifndef _LLAMSIS_H
-#define _LLAMSIS_H
-
-/* Numero de llamadas disponibles */
-#define NSERVICIOS 3
-
-#define CREAR_PROCESO 0
-#define TERMINAR_PROCESO 1
-#define ESCRIBIR 2
-
-#endif /* _LLAMSIS_H */
-</file>
-
-<file path="minikernel/kernel.c">
-/*
- *  kernel/kernel.c
- *
- *  Minikernel. Versi�n 1.0
- *
- *  Fernando P�rez Costoya
- *
- */
-
-/*
- *
- * Fichero que contiene la funcionalidad del sistema operativo
- *
- */
-
-#include "kernel.h"	/* Contiene defs. usadas por este modulo */
-
-/*
- *
- * Funciones relacionadas con la tabla de procesos:
- *	iniciar_tabla_proc buscar_BCP_libre
- *
- */
-
-/*
- * Funci�n que inicia la tabla de procesos
- */
-static void iniciar_tabla_proc(){
-	int i;
-
-	for (i=0; i<MAX_PROC; i++)
-		tabla_procs[i].estado=NO_USADA;
-}
-
-/*
- * Funci�n que busca una entrada libre en la tabla de procesos
- */
-static int buscar_BCP_libre(){
-	int i;
-
-	for (i=0; i<MAX_PROC; i++)
-		if (tabla_procs[i].estado==NO_USADA)
-			return i;
-	return -1;
-}
-
-/*
- *
- * Funciones que facilitan el manejo de las listas de BCPs
- *	insertar_ultimo eliminar_primero eliminar_elem
- *
- * NOTA: PRIMERO SE DEBE LLAMAR A eliminar Y LUEGO A insertar
- */
-
-/*
- * Inserta un BCP al final de la lista.
- */
-static void insertar_ultimo(lista_BCPs *lista, BCP * proc){
-	if (lista->primero==NULL)
-		lista->primero= proc;
-	else
-		lista->ultimo->siguiente=proc;
-	lista->ultimo= proc;
-	proc->siguiente=NULL;
-}
-
-/*
- * Elimina el primer BCP de la lista.
- */
-static void eliminar_primero(lista_BCPs *lista){
-
-	if (lista->ultimo==lista->primero)
-		lista->ultimo=NULL;
-	lista->primero=lista->primero->siguiente;
-}
-
-/*
- * Elimina un determinado BCP de la lista.
- */
-static void eliminar_elem(lista_BCPs *lista, BCP * proc){
-	BCP *paux=lista->primero;
-
-	if (paux==proc)
-		eliminar_primero(lista);
-	else {
-		for ( ; ((paux) && (paux->siguiente!=proc));
-			paux=paux->siguiente);
-		if (paux) {
-			if (lista->ultimo==paux->siguiente)
-				lista->ultimo=paux;
-			paux->siguiente=paux->siguiente->siguiente;
-		}
-	}
-}
-
-/*
- *
- * Funciones relacionadas con la planificacion
- *	espera_int planificador
- */
-
-/*
- * Espera a que se produzca una interrupcion
- */
-static void espera_int(){
-	int nivel;
-
-	printk("-> NO HAY LISTOS. ESPERA INT\n");
-
-	/* Baja al m�nimo el nivel de interrupci�n mientras espera */
-	nivel=fijar_nivel_int(NIVEL_1);
-	halt();
-	fijar_nivel_int(nivel);
-}
-
-/*
- * Funci�n de planificacion que implementa un algoritmo FIFO.
- */
-static BCP * planificador(){
-	while (lista_listos.primero==NULL)
-		espera_int();		/* No hay nada que hacer */
-	return lista_listos.primero;
-}
-
-/*
- *
- * Funcion auxiliar que termina proceso actual liberando sus recursos.
- * Usada por llamada terminar_proceso y por rutinas que tratan excepciones
- *
- */
-static void liberar_proceso(){
-	BCP * p_proc_anterior;
-
-	liberar_imagen(p_proc_actual->info_mem); /* liberar mapa */
-
-	p_proc_actual->estado=TERMINADO;
-	eliminar_primero(&lista_listos); /* proc. fuera de listos */
-
-	/* Realizar cambio de contexto */
-	p_proc_anterior=p_proc_actual;
-	p_proc_actual=planificador();
-
-	printk("-> C.CONTEXTO POR FIN: de %d a %d\n",
-			p_proc_anterior->id, p_proc_actual->id);
-
-	liberar_pila(p_proc_anterior->pila);
-	cambio_contexto(NULL, &(p_proc_actual->contexto_regs));
-        return; /* no deber�a llegar aqui */
-}
-
-/*
- *
- * Funciones relacionadas con el tratamiento de interrupciones
- *	excepciones: exc_arit exc_mem
- *	interrupciones de reloj: int_reloj
- *	interrupciones del terminal: int_terminal
- *	llamadas al sistemas: llam_sis
- *	interrupciones SW: int_sw
- *
- */
-
-/*
- * Tratamiento de excepciones aritmeticas
- */
-static void exc_arit(){
-
-	if (!viene_de_modo_usuario())
-		panico("excepcion aritmetica cuando estaba dentro del kernel");
-
-
-	printk("-> EXCEPCION ARITMETICA EN PROC %d\n", p_proc_actual->id);
-	liberar_proceso();
-
-        return; /* no deber�a llegar aqui */
-}
-
-/*
- * Tratamiento de excepciones en el acceso a memoria
- */
-static void exc_mem(){
-
-	if (!viene_de_modo_usuario())
-		panico("excepcion de memoria cuando estaba dentro del kernel");
-
-
-	printk("-> EXCEPCION DE MEMORIA EN PROC %d\n", p_proc_actual->id);
-	liberar_proceso();
-
-        return; /* no deber�a llegar aqui */
-}
-
-/*
- * Tratamiento de interrupciones de terminal
- */
-static void int_terminal(){
-	char car;
-
-	car = leer_puerto(DIR_TERMINAL);
-	printk("-> TRATANDO INT. DE TERMINAL %c\n", car);
-
-        return;
-}
-
-/*
- * Tratamiento de interrupciones de reloj
- */
-static void int_reloj(){
-
-	printk("-> TRATANDO INT. DE RELOJ\n");
-
-        return;
-}
-
-/*
- * Tratamiento de llamadas al sistema
- */
-static void tratar_llamsis(){
-	int nserv, res;
-
-	nserv=leer_registro(0);
-	if (nserv<NSERVICIOS)
-		res=(tabla_servicios[nserv].fservicio)();
-	else
-		res=-1;		/* servicio no existente */
-	escribir_registro(0,res);
-	return;
-}
-
-/*
- * Tratamiento de interrupciuones software
- */
-static void int_sw(){
-
-	printk("-> TRATANDO INT. SW\n");
-
-	return;
-}
-
-/*
- *
- * Funcion auxiliar que crea un proceso reservando sus recursos.
- * Usada por llamada crear_proceso.
- *
- */
-static int crear_tarea(char *prog){
-	void * imagen, *pc_inicial;
-	int error=0;
-	int proc;
-	BCP *p_proc;
-
-	proc=buscar_BCP_libre();
-	if (proc==-1)
-		return -1;	/* no hay entrada libre */
-
-	/* A rellenar el BCP ... */
-	p_proc=&(tabla_procs[proc]);
-
-	/* crea la imagen de memoria leyendo ejecutable */
-	imagen=crear_imagen(prog, &pc_inicial);
-	if (imagen)
-	{
-		p_proc->info_mem=imagen;
-		p_proc->pila=crear_pila(TAM_PILA);
-		fijar_contexto_ini(p_proc->info_mem, p_proc->pila, TAM_PILA,
-			pc_inicial,
-			&(p_proc->contexto_regs));
-		p_proc->id=proc;
-		p_proc->estado=LISTO;
-
-		/* lo inserta al final de cola de listos */
-		insertar_ultimo(&lista_listos, p_proc);
-		error= 0;
-	}
-	else
-		error= -1; /* fallo al crear imagen */
-
-	return error;
-}
-
-/*
- *
- * Rutinas que llevan a cabo las llamadas al sistema
- *	sis_crear_proceso sis_escribir
- *
- */
-
-/*
- * Tratamiento de llamada al sistema crear_proceso. Llama a la
- * funcion auxiliar crear_tarea sis_terminar_proceso
- */
-int sis_crear_proceso(){
-	char *prog;
-	int res;
-
-	printk("-> PROC %d: CREAR PROCESO\n", p_proc_actual->id);
-	prog=(char *)leer_registro(1);
-	res=crear_tarea(prog);
-	return res;
-}
-
-/*
- * Tratamiento de llamada al sistema escribir. Llama simplemente a la
- * funcion de apoyo escribir_ker
- */
-int sis_escribir()
-{
-	char *texto;
-	unsigned int longi;
-
-	texto=(char *)leer_registro(1);
-	longi=(unsigned int)leer_registro(2);
-
-	escribir_ker(texto, longi);
-	return 0;
-}
-
-/*
- * Tratamiento de llamada al sistema terminar_proceso. Llama a la
- * funcion auxiliar liberar_proceso
- */
-int sis_terminar_proceso(){
-
-	printk("-> FIN PROCESO %d\n", p_proc_actual->id);
-
-	liberar_proceso();
-
-        return 0; /* no deber�a llegar aqui */
-}
-
-//meter aqui las llamadas a sistema!!
-
-
-/*
- *
- * Rutina de inicializaci�n invocada en arranque
- *
- */
-int main(){
-	/* se llega con las interrupciones prohibidas */
-
-	instal_man_int(EXC_ARITM, exc_arit); 
-	instal_man_int(EXC_MEM, exc_mem); 
-	instal_man_int(INT_RELOJ, int_reloj); 
-	instal_man_int(INT_TERMINAL, int_terminal); 
-	instal_man_int(LLAM_SIS, tratar_llamsis); 
-	instal_man_int(INT_SW, int_sw); 
-
-	iniciar_cont_int();		/* inicia cont. interr. */
-	iniciar_cont_reloj(TICK);	/* fija frecuencia del reloj */
-	iniciar_cont_teclado();		/* inici cont. teclado */
-
-	iniciar_tabla_proc();		/* inicia BCPs de tabla de procesos */
-
-	/* crea proceso inicial */
-	if (crear_tarea((void *)"init")<0)
-		panico("no encontrado el proceso inicial");
-	
-	/* activa proceso inicial */
-	p_proc_actual=planificador();
-	cambio_contexto(NULL, &(p_proc_actual->contexto_regs));
-	panico("S.O. reactivado inesperadamente");
-	return 0;
-}
-</file>
-
 <file path="minikernel/Makefile">
 #
 # minikernel/Makefile
@@ -881,43 +374,6 @@ clean:
 	rm -f kernel.o kernel HAL.o
 </file>
 
-<file path="usuario/include/servicios.h">
-/*
- *  usuario/include/servicios.h
- *
- *  Minikernel. Versi�n 1.0
- *
- *  Fernando P�rez Costoya
- *
- */
-
-/*
- *
- * Fichero de cabecera que contiene los prototipos de funciones de
- * biblioteca que proporcionan la interfaz de llamadas al sistema.
- *
- *      SE DEBE MODIFICAR AL INCLUIR NUEVAS LLAMADAS
- *
- */
-
-#ifndef SERVICIOS_H
-#define SERVICIOS_H
-
-/* Evita el uso del printf de la bilioteca est�ndar */
-#define printf escribirf
-
-/* Funcion de biblioteca */
-int escribirf(const char *formato, ...);
-
-/* Llamadas al sistema proporcionadas */
-int crear_proceso(char *prog);
-int terminar_proceso();
-int escribir(char *texto, unsigned int longi);
-//meter cabeceras nuevas
-
-#endif /* SERVICIOS_H */
-</file>
-
 <file path="usuario/lib/Makefile">
 #
 # usuario/lib/Makefile
@@ -942,54 +398,6 @@ libserv.a: serv.o misc.o
 
 clean:
 	rm -f serv.o libserv.a misc.o
-</file>
-
-<file path="usuario/lib/serv.c">
-/*
- *  usuario/lib/serv.c
- *
- *  Minikernel. Versión 1.0
- *
- *  Fernando Pérez Costoya
- *
- */
-
-/*
- *
- * Fichero que contiene las definiciones de las funciones de interfaz
- * a las llamadas al sistema. Usa la funcion de apoyo llamsis
- *
- *      SE DEBE MODIFICAR AL INCLUIR NUEVAS LLAMADAS
- *
- */
-
-#include "llamsis.h"
-#include "servicios.h"
-
-/* Función del módulo "misc" que prepara el código de la llamada
-   (en el registro 0), los parámetros (en registros 1, 2, ...), realiza la
-   instruccion de llamada al sistema  y devuelve el resultado 
-   (que obtiene del registro 0) */
-
-int llamsis(int llamada, int nargs, ... /* args */);
-
-
-/*
- *
- * Funciones interfaz a las llamadas al sistema
- *
- */
-
-
-int crear_proceso(char *prog){
-	return llamsis(CREAR_PROCESO, 1, (long)prog);
-}
-int terminar_proceso(){
-	return llamsis(TERMINAR_PROCESO, 0);
-}
-int escribir(char *texto, unsigned int longi){
-	return llamsis(ESCRIBIR, 2, (long)texto, (long)longi);
-}
 </file>
 
 <file path="usuario/abridor.c">
@@ -1334,98 +742,6 @@ int main(){
 	printf("excep_mem: termina\n");
 	terminar_proceso();
 	return 0; /* No se debería llegar a este punto */
-}
-</file>
-
-<file path="usuario/init.c">
-/*
- * usuario/init.c
- *
- *  Minikernel. Versión 1.0
- *
- *  Fernando Pérez Costoya
- *
- */
-
-/* Programa inicial que arranca el S.O. Sólo se ejecutarán los programas
-   que se incluyan aquí, que, evidentemente, pueden ejecutar otros
-   programas...
-*/
-
-/*
- *
- * Contiene las mismas pruebas que se realizan para evaluar la práctica.
- * Para llevar a cabo cada prueba, comente y descomente
- * las líneas correspondientes. En la versión inicial, la parte descomentada
- * se corresponde con funcionalidad ya implementada en el material de apoyo.
- *
- */
-
-#include "servicios.h"
-
-int main(){
-
-	printf("init: comienza\n");
-
-/* EJEMPLO DE PRUEBA INICIAL QUE YA FUNCIONA PUESTO QUE CORRESPONDE CON LA
-FUNCIONALIDAD YA IMPLEMENTADA EN EL MATERIAL DE APOYO. UNA VEZ QUE IMPLEMENTE
-ALGO COMENTE ESTA PARTE Y DESCOMENTE LA PRUEBA CORRESPONDIENTE */
-
-	if (crear_proceso("simplon")<0)
-                printf("Error creando simplon\n");
-
-	if (crear_proceso("excep_arit")<0)
-		printf("Error creando excep_arit\n");
-
-	if (crear_proceso("excep_mem")<0)
-		printf("Error creando excep_mem\n");
-	
-	if (crear_proceso("noexiste")<0)
-		printf("Error creando noexiste\n");
-
-/* FIN PRUEBA INICIAL */
-
-/* PRUEBA DE LA LLAMADA OBTENER_ID_PR
-{
-        int i;
-        for (i=1; i<=2; i++)
-                if (crear_proceso("yosoy")<0)
-                        printf("Error creando yosoy\n");
-}
-*/
-
-/* PRUEBA DE LA LLAMADA DORMIR
-	if (crear_proceso("prueba_dormir")<0)
-		printf("Error creando prueba_dormir\n");
-*/
-
-/* PRIMERA PRUEBA DE MUTEX
-	if (crear_proceso("prueba_mutex1")<0)
-		printf("Error creando prueba_mutex1\n");
-*/
-
-/* SEGUNDA PRUEBA DE MUTEX
-	if (crear_proceso("prueba_mutex2")<0)
-		printf("Error creando prueba_mutex2\n");
-*/
-
-/* PRIMERA PRUEBA DE ROUND-ROBIN
-	if (crear_proceso("prueba_RR1")<0)
-		printf("Error creando prueba_RR1\n");
-*/
-
-/* SEGUNDA PRUEBA DE ROUND-ROBIN
-	if (crear_proceso("prueba_RR2")<0)
-		printf("Error creando prueba_RR2\n");
-*/
-
-/* PRUEBA DEL TERMINAL
-	if (crear_proceso("prueba_term")<0)
-		printf("Error creando prueba_term\n");
-*/
-
-	printf("init: termina\n");
-	return 0; 
 }
 </file>
 
@@ -2050,6 +1366,755 @@ clean:
 	@cd boot; make clean
 	cd minikernel; make clean
 	cd usuario; make clean
+</file>
+
+<file path="usuario/init.c">
+/*
+ * usuario/init.c
+ *
+ *  Minikernel. Versi�n 1.0
+ *
+ *  Fernando P�rez Costoya
+ *
+ */
+
+/* Programa inicial que arranca el S.O. S�lo se ejecutar�n los programas
+   que se incluyan aqu�, que, evidentemente, pueden ejecutar otros
+   programas...
+*/
+
+/*
+ *
+ * Contiene las mismas pruebas que se realizan para evaluar la pr�ctica.
+ * Para llevar a cabo cada prueba, comente y descomente
+ * las l�neas correspondientes. En la versi�n inicial, la parte descomentada
+ * se corresponde con funcionalidad ya implementada en el material de apoyo.
+ *
+ */
+
+#include "servicios.h"
+
+int main(){
+
+	printf("init: comienza\n");
+
+/* EJEMPLO DE PRUEBA INICIAL QUE YA FUNCIONA PUESTO QUE CORRESPONDE CON LA
+FUNCIONALIDAD YA IMPLEMENTADA EN EL MATERIAL DE APOYO. UNA VEZ QUE IMPLEMENTE
+ALGO COMENTE ESTA PARTE Y DESCOMENTE LA PRUEBA CORRESPONDIENTE */
+
+	/* if (crear_proceso("simplon")<0)
+                printf("Error creando simplon\n");
+
+	if (crear_proceso("excep_arit")<0)
+		printf("Error creando excep_arit\n");
+
+	if (crear_proceso("excep_mem")<0)
+		printf("Error creando excep_mem\n");
+	
+	if (crear_proceso("noexiste")<0)
+		printf("Error creando noexiste\n");*/
+
+/* FIN PRUEBA INICIAL */
+
+/* PRUEBA DE LA LLAMADA OBTENER_ID_PR */
+{
+        int i;
+        for (i=1; i<=2; i++)
+                if (crear_proceso("yosoy")<0)
+                        printf("Error creando yosoy\n");
+}
+
+
+/* PRUEBA DE LA LLAMADA DORMIR
+	if (crear_proceso("prueba_dormir")<0)
+		printf("Error creando prueba_dormir\n");
+*/
+
+/* PRIMERA PRUEBA DE MUTEX
+	if (crear_proceso("prueba_mutex1")<0)
+		printf("Error creando prueba_mutex1\n");
+*/
+
+/* SEGUNDA PRUEBA DE MUTEX
+	if (crear_proceso("prueba_mutex2")<0)
+		printf("Error creando prueba_mutex2\n");
+*/
+
+/* PRIMERA PRUEBA DE ROUND-ROBIN
+	if (crear_proceso("prueba_RR1")<0)
+		printf("Error creando prueba_RR1\n");
+*/
+
+/* SEGUNDA PRUEBA DE ROUND-ROBIN
+	if (crear_proceso("prueba_RR2")<0)
+		printf("Error creando prueba_RR2\n");
+*/
+
+/* PRUEBA DEL TERMINAL
+	if (crear_proceso("prueba_term")<0)
+		printf("Error creando prueba_term\n");
+*/
+
+	printf("init: termina\n");
+	return 0; 
+}
+</file>
+
+<file path="minikernel/include/llamsis.h">
+/*
+ *  minikernel/kernel/include/llamsis.h
+ *
+ *  Minikernel. Versi�n 1.0
+ *
+ *  Fernando P�rez Costoya
+ *
+ */
+
+/*
+ *
+ * Fichero de cabecera que contiene el numero asociado a cada llamada
+ *
+ * 	SE DEBE MODIFICAR PARA INCLUIR NUEVAS LLAMADAS
+ *
+ */
+
+#ifndef _LLAMSIS_H
+#define _LLAMSIS_H
+
+/* Numero de llamadas disponibles */
+#define NSERVICIOS 5
+
+#define CREAR_PROCESO 0
+#define TERMINAR_PROCESO 1
+#define ESCRIBIR 2
+#define OBTENER_ID_PR 3
+#define DORMIR 4
+
+#endif /* _LLAMSIS_H */
+</file>
+
+<file path="minikernel/kernel.c">
+/*
+ *  kernel/kernel.c
+ *
+ *  Minikernel. Versi�n 1.0
+ *
+ *  Fernando P�rez Costoya
+ *
+ */
+
+/*
+ *
+ * Fichero que contiene la funcionalidad del sistema operativo
+ *
+ */
+
+#include "kernel.h"	/* Contiene defs. usadas por este modulo */
+
+/*
+ *
+ * Funciones relacionadas con la tabla de procesos:
+ *	iniciar_tabla_proc buscar_BCP_libre
+ *
+ */
+
+/*
+ * Funci�n que inicia la tabla de procesos
+ */
+static void iniciar_tabla_proc(){
+	int i;
+
+	for (i=0; i<MAX_PROC; i++)
+		tabla_procs[i].estado=NO_USADA;
+}
+
+/*
+ * Funci�n que busca una entrada libre en la tabla de procesos
+ */
+static int buscar_BCP_libre(){
+	int i;
+
+	for (i=0; i<MAX_PROC; i++)
+		if (tabla_procs[i].estado==NO_USADA)
+			return i;
+	return -1;
+}
+
+/*
+ *
+ * Funciones que facilitan el manejo de las listas de BCPs
+ *	insertar_ultimo eliminar_primero eliminar_elem
+ *
+ * NOTA: PRIMERO SE DEBE LLAMAR A eliminar Y LUEGO A insertar
+ */
+
+/*
+ * Inserta un BCP al final de la lista.
+ */
+static void insertar_ultimo(lista_BCPs *lista, BCP * proc){
+	if (lista->primero==NULL)
+		lista->primero= proc;
+	else
+		lista->ultimo->siguiente=proc;
+	lista->ultimo= proc;
+	proc->siguiente=NULL;
+}
+
+/*
+ * Elimina el primer BCP de la lista.
+ */
+static void eliminar_primero(lista_BCPs *lista){
+
+	if (lista->ultimo==lista->primero)
+		lista->ultimo=NULL;
+	lista->primero=lista->primero->siguiente;
+}
+
+/*
+ * Elimina un determinado BCP de la lista.
+ */
+static void eliminar_elem(lista_BCPs *lista, BCP * proc){
+	BCP *paux=lista->primero;
+
+	if (paux==proc)
+		eliminar_primero(lista);
+	else {
+		for ( ; ((paux) && (paux->siguiente!=proc));
+			paux=paux->siguiente);
+		if (paux) {
+			if (lista->ultimo==paux->siguiente)
+				lista->ultimo=paux;
+			paux->siguiente=paux->siguiente->siguiente;
+		}
+	}
+}
+
+/*
+ *
+ * Funciones relacionadas con la planificacion
+ *	espera_int planificador
+ */
+
+/*
+ * Espera a que se produzca una interrupcion
+ */
+static void espera_int(){
+	int nivel;
+
+	printk("-> NO HAY LISTOS. ESPERA INT\n");
+
+	/* Baja al m�nimo el nivel de interrupci�n mientras espera */
+	nivel=fijar_nivel_int(NIVEL_1);
+	halt();
+	fijar_nivel_int(nivel);
+}
+
+/*
+ * Funci�n de planificacion que implementa un algoritmo FIFO.
+ */
+static BCP * planificador(){
+	while (lista_listos.primero==NULL)
+		espera_int();		/* No hay nada que hacer */
+	return lista_listos.primero;
+}
+
+/*
+ *
+ * Funcion auxiliar que termina proceso actual liberando sus recursos.
+ * Usada por llamada terminar_proceso y por rutinas que tratan excepciones
+ *
+ */
+static void liberar_proceso(){
+	BCP * p_proc_anterior;
+
+	liberar_imagen(p_proc_actual->info_mem); /* liberar mapa */
+
+	p_proc_actual->estado=TERMINADO;
+	eliminar_primero(&lista_listos); /* proc. fuera de listos */
+
+	/* Realizar cambio de contexto */
+	p_proc_anterior=p_proc_actual;
+	p_proc_actual=planificador();
+
+	printk("-> C.CONTEXTO POR FIN: de %d a %d\n",
+			p_proc_anterior->id, p_proc_actual->id);
+
+	liberar_pila(p_proc_anterior->pila);
+	cambio_contexto(NULL, &(p_proc_actual->contexto_regs));
+        return; /* no deber�a llegar aqui */
+}
+
+/*
+ *
+ * Funciones relacionadas con el tratamiento de interrupciones
+ *	excepciones: exc_arit exc_mem
+ *	interrupciones de reloj: int_reloj
+ *	interrupciones del terminal: int_terminal
+ *	llamadas al sistemas: llam_sis
+ *	interrupciones SW: int_sw
+ *
+ */
+
+/*
+ * Tratamiento de excepciones aritmeticas
+ */
+static void exc_arit(){
+
+	if (!viene_de_modo_usuario())
+		panico("excepcion aritmetica cuando estaba dentro del kernel");
+
+
+	printk("-> EXCEPCION ARITMETICA EN PROC %d\n", p_proc_actual->id);
+	liberar_proceso();
+
+        return; /* no deber�a llegar aqui */
+}
+
+/*
+ * Tratamiento de excepciones en el acceso a memoria
+ */
+static void exc_mem(){
+
+	if (!viene_de_modo_usuario())
+		panico("excepcion de memoria cuando estaba dentro del kernel");
+
+
+	printk("-> EXCEPCION DE MEMORIA EN PROC %d\n", p_proc_actual->id);
+	liberar_proceso();
+
+        return; /* no deber�a llegar aqui */
+}
+
+/*
+ * Tratamiento de interrupciones de terminal
+ */
+static void int_terminal(){
+	char car;
+
+	car = leer_puerto(DIR_TERMINAL);
+	printk("-> TRATANDO INT. DE TERMINAL %c\n", car);
+
+        return;
+}
+
+/*
+ * Tratamiento de interrupciones de reloj
+ */
+static void int_reloj(){
+
+	printk("-> TRATANDO INT. DE RELOJ\n");
+
+        return;
+}
+
+/*
+ * Tratamiento de llamadas al sistema
+ */
+static void tratar_llamsis(){
+	int nserv, res;
+
+	nserv=leer_registro(0);
+	if (nserv<NSERVICIOS)
+		res=(tabla_servicios[nserv].fservicio)();
+	else
+		res=-1;		/* servicio no existente */
+	escribir_registro(0,res);
+	return;
+}
+
+/*
+ * Tratamiento de interrupciuones software
+ */
+static void int_sw(){
+
+	printk("-> TRATANDO INT. SW\n");
+
+	return;
+}
+
+/*
+ *
+ * Funcion auxiliar que crea un proceso reservando sus recursos.
+ * Usada por llamada crear_proceso.
+ *
+ */
+static int crear_tarea(char *prog){
+	void * imagen, *pc_inicial;
+	int error=0;
+	int proc;
+	BCP *p_proc;
+
+	proc=buscar_BCP_libre();
+	if (proc==-1)
+		return -1;	/* no hay entrada libre */
+
+	/* A rellenar el BCP ... */
+	p_proc=&(tabla_procs[proc]);
+
+	/* crea la imagen de memoria leyendo ejecutable */
+	imagen=crear_imagen(prog, &pc_inicial);
+	if (imagen)
+	{
+		p_proc->info_mem=imagen;
+		p_proc->pila=crear_pila(TAM_PILA);
+		fijar_contexto_ini(p_proc->info_mem, p_proc->pila, TAM_PILA,
+			pc_inicial,
+			&(p_proc->contexto_regs));
+		p_proc->id=proc;
+		p_proc->estado=LISTO;
+
+		/* lo inserta al final de cola de listos */
+		insertar_ultimo(&lista_listos, p_proc);
+		error= 0;
+	}
+	else
+		error= -1; /* fallo al crear imagen */
+
+	return error;
+}
+
+/*
+ *
+ * Rutinas que llevan a cabo las llamadas al sistema
+ *	sis_crear_proceso sis_escribir sis_obtener_id_pr
+ *
+ */
+
+/*
+ * Tratamiento de llamada al sistema crear_proceso. Llama a la
+ * funcion auxiliar crear_tarea sis_terminar_proceso
+ */
+int sis_crear_proceso(){
+	char *prog;
+	int res;
+
+	printk("-> PROC %d: CREAR PROCESO\n", p_proc_actual->id);
+	prog=(char *)leer_registro(1);
+	res=crear_tarea(prog);
+	return res;
+}
+
+/*
+ * Tratamiento de llamada al sistema escribir. Llama simplemente a la
+ * funcion de apoyo escribir_ker
+ */
+int sis_escribir()
+{
+	char *texto;
+	unsigned int longi;
+
+	texto=(char *)leer_registro(1);
+	longi=(unsigned int)leer_registro(2);
+
+	escribir_ker(texto, longi);
+	return 0;
+}
+
+/*
+ * Tratamiento de llamada al sistema terminar_proceso. Llama a la
+ * funcion auxiliar liberar_proceso
+ */
+int sis_terminar_proceso(){
+
+	printk("-> FIN PROCESO %d\n", p_proc_actual->id);
+
+	liberar_proceso();
+
+        return 0; /* no deber�a llegar aqui */
+}
+
+//meter aqui las llamadas a sistema!!
+/*
+ * Tratamiento de llamada al sistema obtener_id_pr. Devuelve el
+ * identifcador del proceso en ejeciución
+ */
+int sis_obtener_id_pr(){
+	return p_proc_actual->id;
+}
+
+/*
+ * Tratamiento de llamada al sistema dormir
+ * Bloquea al proceso invocador durante los segundos especificados
+*/
+int sis_dormir(){
+    unsigned int segundos;
+    BCP *p_proc_antiguo;
+    int nivel_previo;
+
+    /* 1. Obtener el parametro recibido en el registro 1 */
+    segundos = (unsigned int)leer_registro(1);
+
+    /* Si se piden 0 segundos, no hace falta bloquearse */
+    if (segundos == 0)
+        return 0;
+
+    /* 2. Seccion critica: elevar nivel a NIVEL_3 para evitar que int_reloj 
+          interrumpa mientras modificamos colas de BCPs */
+    nivel_previo = fijar_nivel_int(NIVEL_3);
+
+    /* 3. Calcular ticks restantes (prohibido usar leer_reloj_CMOS) */
+    p_proc_actual->ticks_restantes = segundos * TICK;
+
+    /* 4. Cambiar estado a BLOQUEADO */
+    p_proc_actual->estado = BLOQUEADO;
+
+    /* 5. Mover el proceso: sacarlo de lista_listos y meterlo en lista_bloqueados_reloj */
+    eliminar_primero(&lista_listos);
+    insertar_ultimo(&lista_bloqueados_reloj, p_proc_actual);
+
+    /* 6. Conmutar contexto voluntario:
+          Guardamos referencia al que se duerme y elegimos el nuevo proceso */
+    p_proc_antiguo = p_proc_actual;
+    p_proc_actual = planificador();
+
+    printk("-> DORMIR: C.CONTEXTO de %d a %d (ticks: %d)\n", 
+           p_proc_antiguo->id, p_proc_actual->id, p_proc_antiguo->ticks_restantes);
+
+    /* 7. Restaurar nivel de interrupcion antes de conmutar */
+    fijar_nivel_int(nivel_previo);
+
+    /* 8. Salvar registros del proceso saliente y cargar los del nuevo */
+    cambio_contexto(&(p_proc_antiguo->contexto_regs), &(p_proc_actual->contexto_regs));
+
+    return 0;
+}
+
+
+/*
+ *
+ * Rutina de inicializaci�n invocada en arranque
+ *
+ */
+int main(){
+	/* se llega con las interrupciones prohibidas */
+
+	instal_man_int(EXC_ARITM, exc_arit); 
+	instal_man_int(EXC_MEM, exc_mem); 
+	instal_man_int(INT_RELOJ, int_reloj); 
+	instal_man_int(INT_TERMINAL, int_terminal); 
+	instal_man_int(LLAM_SIS, tratar_llamsis); 
+	instal_man_int(INT_SW, int_sw); 
+
+	iniciar_cont_int();		/* inicia cont. interr. */
+	iniciar_cont_reloj(TICK);	/* fija frecuencia del reloj */
+	iniciar_cont_teclado();		/* inici cont. teclado */
+
+	iniciar_tabla_proc();		/* inicia BCPs de tabla de procesos */
+
+	/* crea proceso inicial */
+	if (crear_tarea((void *)"init")<0)
+		panico("no encontrado el proceso inicial");
+	
+	/* activa proceso inicial */
+	p_proc_actual=planificador();
+	cambio_contexto(NULL, &(p_proc_actual->contexto_regs));
+	panico("S.O. reactivado inesperadamente");
+	return 0;
+}
+</file>
+
+<file path="usuario/include/servicios.h">
+/*
+ *  usuario/include/servicios.h
+ *
+ *  Minikernel. Versi�n 1.0
+ *
+ *  Fernando P�rez Costoya
+ *
+ */
+
+/*
+ *
+ * Fichero de cabecera que contiene los prototipos de funciones de
+ * biblioteca que proporcionan la interfaz de llamadas al sistema.
+ *
+ *      SE DEBE MODIFICAR AL INCLUIR NUEVAS LLAMADAS
+ *
+ */
+
+#ifndef SERVICIOS_H
+#define SERVICIOS_H
+
+/* Evita el uso del printf de la bilioteca est�ndar */
+#define printf escribirf
+
+/* Funcion de biblioteca */
+int escribirf(const char *formato, ...);
+
+/* Llamadas al sistema proporcionadas */
+int crear_proceso(char *prog);
+int terminar_proceso();
+int escribir(char *texto, unsigned int longi);
+int obtener_id_pr();
+int dormir(unsigned int segundos);
+//meter cabeceras nuevas
+
+#endif /* SERVICIOS_H */
+</file>
+
+<file path="usuario/lib/serv.c">
+/*
+ *  usuario/lib/serv.c
+ *
+ *  Minikernel. Versi�n 1.0
+ *
+ *  Fernando P�rez Costoya
+ *
+ */
+
+/*
+ *
+ * Fichero que contiene las definiciones de las funciones de interfaz
+ * a las llamadas al sistema. Usa la funcion de apoyo llamsis
+ *
+ *      SE DEBE MODIFICAR AL INCLUIR NUEVAS LLAMADAS
+ *
+ */
+
+#include "llamsis.h"
+#include "servicios.h"
+
+/* Funci�n del m�dulo "misc" que prepara el c�digo de la llamada
+   (en el registro 0), los par�metros (en registros 1, 2, ...), realiza la
+   instruccion de llamada al sistema  y devuelve el resultado 
+   (que obtiene del registro 0) */
+
+int llamsis(int llamada, int nargs, ... /* args */);
+
+
+/*
+ *
+ * Funciones interfaz a las llamadas al sistema
+ *
+ */
+
+
+int crear_proceso(char *prog){
+	return llamsis(CREAR_PROCESO, 1, (long)prog);
+}
+int terminar_proceso(){
+	return llamsis(TERMINAR_PROCESO, 0);
+}
+int escribir(char *texto, unsigned int longi){
+	return llamsis(ESCRIBIR, 2, (long)texto, (long)longi);
+}
+int obtener_id_pr(){
+   return llamsis(OBTENER_ID_PR, 0);
+}
+int dormir (unsigned int segundos){
+   return llamsis(DORMIR, 1, (long)segundos);
+}
+</file>
+
+<file path="minikernel/include/kernel.h">
+/*
+ *  minikernel/include/kernel.h
+ *
+ *  Minikernel. Versi�n 1.0
+ *
+ *  Fernando P�rez Costoya
+ *
+ */
+
+/*
+ *
+ * Fichero de cabecera que contiene definiciones usadas por kernel.c
+ *
+ *      SE DEBE MODIFICAR PARA INCLUIR NUEVA FUNCIONALIDAD
+ *
+ */
+
+#ifndef _KERNEL_H
+#define _KERNEL_H
+
+#include "const.h"
+#include "HAL.h"
+#include "llamsis.h"
+
+/*
+ *
+ * Definicion del tipo que corresponde con el BCP.
+ * Se va a modificar al incluir la funcionalidad pedida.
+ *
+ */
+typedef struct BCP_t *BCPptr;
+
+typedef struct BCP_t {
+        int id;				/* ident. del proceso */
+        int estado;			/* TERMINADO|LISTO|EJECUCION|BLOQUEADO*/
+        contexto_t contexto_regs;	/* copia de regs. de UCP */
+        void * pila;			/* dir. inicial de la pila */
+	BCPptr siguiente;		/* puntero a otro BCP */
+	void *info_mem;			/* descriptor del mapa de memoria */
+	int ticks_restantes;		/* ticks de reloj que le faltan para despertar*/
+} BCP;
+
+/*
+ *
+ * Definicion del tipo que corresponde con la cabecera de una lista
+ * de BCPs. Este tipo se puede usar para diversas listas (procesos listos,
+ * procesos bloqueados en sem�foro, etc.).
+ *
+ */
+
+typedef struct{
+	BCP *primero;
+	BCP *ultimo;
+} lista_BCPs;
+
+
+/*
+ * Variable global que identifica el proceso actual
+ */
+
+BCP * p_proc_actual=NULL;
+
+/*
+ * Variable global que representa la tabla de procesos
+ */
+
+BCP tabla_procs[MAX_PROC];
+
+/*
+ * Variable global que representa la cola de procesos listos
+ */
+lista_BCPs lista_listos= {NULL, NULL};
+
+/*
+ * Variable global que representa la cola de procesos bloqueados por reloj
+ */
+lista_BCPs lista_bloqueados_reloj = {NULL, NULL};
+
+/*
+ *
+ * Definici�n del tipo que corresponde con una entrada en la tabla de
+ * llamadas al sistema.
+ *
+ */
+typedef struct{
+	int (*fservicio)();
+} servicio;
+
+
+/*
+ * Prototipos de las rutinas que realizan cada llamada al sistema
+ */
+int sis_crear_proceso();
+int sis_terminar_proceso();
+int sis_escribir();
+int sis_obtener_id_pr();
+int sis_dormir();
+
+/*
+ * Variable global que contiene las rutinas que realizan cada llamada
+ */
+servicio tabla_servicios[NSERVICIOS]={	{sis_crear_proceso},
+					{sis_terminar_proceso},
+					{sis_escribir},
+					{sis_obtener_id_pr},
+					{sis_dormir}};
+
+#endif /* _KERNEL_H */
 </file>
 
 </files>
