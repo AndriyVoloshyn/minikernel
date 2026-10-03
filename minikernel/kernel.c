@@ -337,6 +337,54 @@ int sis_obtener_id_pr(){
 }
 
 /*
+ * Tratamiento de llamada al sistema dormir
+ * Bloquea al proceso invocador durante los segundos especificados
+*/
+int sis_dormir(){
+    unsigned int segundos;
+    BCP *p_proc_antiguo;
+    int nivel_previo;
+
+    /* 1. Obtener el parametro recibido en el registro 1 */
+    segundos = (unsigned int)leer_registro(1);
+
+    /* Si se piden 0 segundos, no hace falta bloquearse */
+    if (segundos == 0)
+        return 0;
+
+    /* 2. Seccion critica: elevar nivel a NIVEL_3 para evitar que int_reloj 
+          interrumpa mientras modificamos colas de BCPs */
+    nivel_previo = fijar_nivel_int(NIVEL_3);
+
+    /* 3. Calcular ticks restantes (prohibido usar leer_reloj_CMOS) */
+    p_proc_actual->ticks_restantes = segundos * TICK;
+
+    /* 4. Cambiar estado a BLOQUEADO */
+    p_proc_actual->estado = BLOQUEADO;
+
+    /* 5. Mover el proceso: sacarlo de lista_listos y meterlo en lista_bloqueados_reloj */
+    eliminar_primero(&lista_listos);
+    insertar_ultimo(&lista_bloqueados_reloj, p_proc_actual);
+
+    /* 6. Conmutar contexto voluntario:
+          Guardamos referencia al que se duerme y elegimos el nuevo proceso */
+    p_proc_antiguo = p_proc_actual;
+    p_proc_actual = planificador();
+
+    printk("-> DORMIR: C.CONTEXTO de %d a %d (ticks: %d)\n", 
+           p_proc_antiguo->id, p_proc_actual->id, p_proc_antiguo->ticks_restantes);
+
+    /* 7. Restaurar nivel de interrupcion antes de conmutar */
+    fijar_nivel_int(nivel_previo);
+
+    /* 8. Salvar registros del proceso saliente y cargar los del nuevo */
+    cambio_contexto(&(p_proc_antiguo->contexto_regs), &(p_proc_actual->contexto_regs));
+
+    return 0;
+}
+
+
+/*
  *
  * Rutina de inicializaci�n invocada en arranque
  *
