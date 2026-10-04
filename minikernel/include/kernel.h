@@ -133,6 +133,7 @@ servicio tabla_servicios[NSERVICIOS]={
 					{sis_obtener_id_pr},
 					{sis_dormir},
 					{sis_crear_mutex},
+					{sis_abrir_mutex},
 					{sis_cerrar_mutex},
 					{sis_lock},
 					{sis_unlock}};

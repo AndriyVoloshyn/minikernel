@@ -131,7 +131,16 @@ static BCP * planificador(){
 static void liberar_proceso(){
 	BCP * p_proc_anterior;
 	int nivel_previo;
+	int i; /* Declaración al principio para evitar errores de compilación */
 
+	for (i = 0; i < NUM_MUT_PROC; i++) {
+		if (p_proc_actual->descriptores_mutex[i] != -1) {
+			escribir_registro(1, i); /* Pasamos el descriptor en el reg 1 */
+			sis_cerrar_mutex();     /* Cierra el mutex y despierta si procede */
+		}
+	}
+
+	/* Liberación normal del mapa de memoria */
 	liberar_imagen(p_proc_actual->info_mem); /* liberar mapa */
 
 	p_proc_actual->estado=TERMINADO;
@@ -151,7 +160,7 @@ static void liberar_proceso(){
 
 	liberar_pila(p_proc_anterior->pila);
 	cambio_contexto(NULL, &(p_proc_actual->contexto_regs));
-        return; /* no debería llegar aqui */
+	return; /* no debería llegar aqui */
 }
 
 /*
