@@ -248,6 +248,79 @@ static void int_reloj(){
 }
 
 /*
+ * Compara dos cadenas de texto. Devuelve 0 si son iguales.
+ */
+static int mi_strcmp(const char *s1, const char *s2) {
+    while (*s1 && (*s1 == *s2)) {
+        s1++;
+        s2++;
+    }
+    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
+}
+
+/*
+ * Copia origen en destino hasta n caracteres asegurando el fin de cadena.
+ */
+static void mi_strcpy(char *dest, const char *orig, int n) {
+    int i;
+    for (i = 0; i < n - 1 && orig[i] != '\0'; i++) {
+        dest[i] = orig[i];
+    }
+    dest[i] = '\0';
+}
+
+/*
+ * Calcula la longitud de una cadena.
+ */
+static int mi_strlen(const char *s) {
+    int len = 0;
+    while (s[len]) len++;
+    return len;
+}
+
+/*
+ * Busca si ya existe un mutex ocupado con el nombre dado en tabla_mutex.
+ * Devuelve el índice en la tabla (0..NUM_MUT-1) o -1 si no existe.
+ */
+static int buscar_mutex_por_nombre(const char *nombre) {
+    int i;
+    for (i = 0; i < NUM_MUT; i++) {
+        if (tabla_mutex[i].ocupado && mi_strcmp(tabla_mutex[i].nombre, nombre) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/*
+ * Busca una entrada libre en tabla_mutex.
+ * Devuelve el índice en la tabla (0..NUM_MUT-1) o -1 si está llena.
+ */
+static int buscar_mutex_libre() {
+    int i;
+    for (i = 0; i < NUM_MUT; i++) {
+        if (!tabla_mutex[i].ocupado) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/*
+ * Busca un descriptor libre en el proceso actual.
+ * Devuelve el índice del descriptor (0..NUM_MUT_PROC-1) o -1 si no quedan.
+ */
+static int buscar_descriptor_libre_proc() {
+    int i;
+    for (i = 0; i < NUM_MUT_PROC; i++) {
+        if (p_proc_actual->descriptores_mutex[i] == -1) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/*
  * Tratamiento de llamadas al sistema
  */
 static void tratar_llamsis(){
@@ -439,20 +512,190 @@ static void iniciar_tabla_mutex() {
         tabla_mutex[i].cola_bloqueados.ultimo = NULL;
     }
 }
+
 /*
- * Rutinas provisionales (stubs) para los servicios de mutex (Parte 2A.1)
- * Devolverán -1 hasta que se implemente su lógica en 2A.2 y 2B
+ * Tratamiento de llamada al sistema crear_mutex.
+ * Parámetro en registro 1: char *nombre
+ * Parámetro en registro 2: int tipo
  */
+
 int sis_crear_mutex() {
-    return -1;
+    char *nombre;
+    int tipo;
+    int desc_libre;
+    int idx_mut;
+    int nivel_previo;
+    BCP *p_proc_antiguo;
+
+    nombre = (char *)leer_registro(1);
+    tipo = (int)leer_registro(2);
+
+    /* 1. Validar parámetros */
+    if (nombre == NULL || mi_strlen(nombre) >= MAX_NOM_MUT) {
+        return -1;
+    }
+    if (tipo != NO_RECURSIVO && tipo != RECURSIVO) {
+        return -1;
+    }
+
+    /* 2. Comprobar si el proceso tiene descriptores libres */
+    desc_libre = buscar_descriptor_libre_proc();
+    if (desc_libre == -1) {
+        return -1; /* Sin descriptores libres en el proceso */
+    }
+
+    /* 3. Proteger la consulta y posible bloqueo */
+    nivel_previo = fijar_nivel_int(NIVEL_3);
+
+    /* Comprobar si ya existe un mutex con ese nombre */
+    if (buscar_mutex_por_nombre(nombre) != -1) {
+        fijar_nivel_int(nivel_previo);
+        return -1; /* Ya existe un mutex con ese nombre */
+    }
+
+    /* 4. Si la tabla está llena, bloquearse en bucle hasta que haya hueco */
+    while ((idx_mut = buscar_mutex_libre()) == -1) {
+        p_proc_actual->estado = BLOQUEADO;
+
+        /* Sacar de lista de listos y meter en la cola de espera de hueco */
+        eliminar_primero(&lista_listos);
+        insertar_ultimo(&lista_bloqueados_crear_mutex, p_proc_actual);
+
+        /* Conmutación voluntaria a otro proceso */
+        p_proc_antiguo = p_proc_actual;
+        p_proc_actual = planificador();
+
+        printk("-> CREAR_MUTEX: bloqueando proc %d (tabla llena). C.CONTEXTO a %d\n",
+               p_proc_antiguo->id, p_proc_actual->id);
+
+        fijar_nivel_int(nivel_previo);
+        cambio_contexto(&(p_proc_antiguo->contexto_regs), &(p_proc_actual->contexto_regs));
+
+        /* Cuando el proceso despierta y recupera la CPU: */
+        nivel_previo = fijar_nivel_int(NIVEL_3);
+
+        /* Al despertar, otro proceso pudo haber creado un mutex con el mismo nombre */
+        if (buscar_mutex_por_nombre(nombre) != -1) {
+            fijar_nivel_int(nivel_previo);
+            return -1;
+        }
+        /* El bucle while volverá a evaluar si efectivamente hay un mutex libre */
+    }
+
+    /* 5. Inicializar la entrada del mutex en la tabla global */
+    tabla_mutex[idx_mut].ocupado = 1;
+    mi_strcpy(tabla_mutex[idx_mut].nombre, nombre, MAX_NOM_MUT);
+    tabla_mutex[idx_mut].tipo = tipo;
+    tabla_mutex[idx_mut].propietario = NULL;
+    tabla_mutex[idx_mut].num_locks = 0;
+    tabla_mutex[idx_mut].ref_count = 1; /* Abierto por quien lo crea */
+    tabla_mutex[idx_mut].cola_bloqueados.primero = NULL;
+    tabla_mutex[idx_mut].cola_bloqueados.ultimo = NULL;
+
+    /* 6. Asignar descriptor en el proceso actual */
+    p_proc_actual->descriptores_mutex[desc_libre] = idx_mut;
+
+    fijar_nivel_int(nivel_previo);
+
+    return desc_libre;
 }
 
 int sis_abrir_mutex() {
-    return -1;
+    char *nombre;
+    int desc_libre;
+    int idx_mut;
+    int nivel_previo;
+
+    nombre = (char *)leer_registro(1);
+
+    /* 1. Validación de parámetros */
+    if (nombre == NULL || mi_strlen(nombre) >= MAX_NOM_MUT) {
+        return -1;
+    }
+
+    /* 2. Comprobar si el proceso tiene descriptores disponibles */
+    desc_libre = buscar_descriptor_libre_proc();
+    if (desc_libre == -1) {
+        return -1; //Agotados los descriptores locales 
+    }
+
+    /* 3. Sección crítica: consultar tabla global de mutex */
+    nivel_previo = fijar_nivel_int(NIVEL_3);
+
+    idx_mut = buscar_mutex_por_nombre(nombre);
+    if (idx_mut == -1) {
+        fijar_nivel_int(nivel_previo);
+        return -1; /* El mutex no existe */
+    }
+
+    /* 4. Asociar descriptor al mutex e incrementar referencias */
+    p_proc_actual->descriptores_mutex[desc_libre] = idx_mut;
+    tabla_mutex[idx_mut].ref_count++;
+
+    fijar_nivel_int(nivel_previo);
+
+    /* Devuelve el descriptor obtenido */
+    return desc_libre;
 }
 
+/*
+ * Tratamiento de llamada al sistema cerrar_mutex.
+ * Parámetro en registro 1: unsigned int mutexid (descriptor del proceso)
+ */
 int sis_cerrar_mutex() {
-    return -1;
+    unsigned int mutexid;
+    int idx_mut;
+    int nivel_previo;
+    BCP *proc_despertado;
+
+    mutexid = (unsigned int)leer_registro(1);
+
+    /* 1. Validar si el descriptor local está en un rango correcto */
+    if (mutexid >= NUM_MUT_PROC) {
+        return -1;
+    }
+
+    /* 2. Sección crítica: validar si el descriptor está en uso y modificar estructuras */
+    nivel_previo = fijar_nivel_int(NIVEL_3);
+
+    idx_mut = p_proc_actual->descriptores_mutex[mutexid];
+    if (idx_mut == -1) {
+        fijar_nivel_int(nivel_previo);
+        return -1; /* El descriptor no apuntaba a ningún mutex */
+    }
+
+    /* 3. Desasociar descriptor del proceso */
+    p_proc_actual->descriptores_mutex[mutexid] = -1;
+
+    /* 4. Decrementar el contador de referencias global */
+    tabla_mutex[idx_mut].ref_count--;
+
+    /* 5. Si no quedan procesos con este mutex abierto, liberarlo */
+    if (tabla_mutex[idx_mut].ref_count == 0) {
+        
+        /* Limpiar campos de la entrada del mutex */
+        tabla_mutex[idx_mut].ocupado = 0;
+        tabla_mutex[idx_mut].nombre[0] = '\0';
+        tabla_mutex[idx_mut].propietario = NULL;
+        tabla_mutex[idx_mut].num_locks = 0;
+        tabla_mutex[idx_mut].cola_bloqueados.primero = NULL;
+        tabla_mutex[idx_mut].cola_bloqueados.ultimo = NULL;
+
+        /* 6. Al quedar un hueco libre en tabla_mutex, comprobar si hay procesos esperándolo */
+        if (lista_bloqueados_crear_mutex.primero != NULL) {
+            proc_despertado = lista_bloqueados_crear_mutex.primero;
+			eliminar_primero(&lista_bloqueados_crear_mutex);
+            
+            proc_despertado->estado = LISTO;
+            insertar_ultimo(&lista_listos, proc_despertado);
+
+            printk("-> CERRAR_MUTEX: despertando proc %d bloqueado en crear_mutex\n", proc_despertado->id);
+        }
+    }
+
+    fijar_nivel_int(nivel_previo);
+
+    return 0; /* Éxito al cerrar */
 }
 
 int sis_lock() {
