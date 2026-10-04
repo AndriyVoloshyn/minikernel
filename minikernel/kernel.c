@@ -303,6 +303,10 @@ static int crear_tarea(char *prog){
 			&(p_proc->contexto_regs));
 		p_proc->id=proc;
 		p_proc->estado=LISTO;
+		int j;
+		for (j = 0; j < NUM_MUT_PROC; j++) {
+    		p_proc->descriptores_mutex[j] = -1;
+		}
 
 		/* SECCION CRITICA: proteger manipulacion de lista_listos */
 		nivel_previo = fijar_nivel_int(NIVEL_3);
@@ -423,6 +427,41 @@ int sis_dormir(){
     return 0;
 }
 
+static void iniciar_tabla_mutex() {
+    int i;
+    for (i = 0; i < NUM_MUT; i++) {
+        tabla_mutex[i].ocupado = 0;
+        tabla_mutex[i].nombre[0] = '\0';
+        tabla_mutex[i].propietario = NULL;
+        tabla_mutex[i].num_locks = 0;
+        tabla_mutex[i].ref_count = 0;
+        tabla_mutex[i].cola_bloqueados.primero = NULL;
+        tabla_mutex[i].cola_bloqueados.ultimo = NULL;
+    }
+}
+/*
+ * Rutinas provisionales (stubs) para los servicios de mutex (Parte 2A.1)
+ * Devolverán -1 hasta que se implemente su lógica en 2A.2 y 2B
+ */
+int sis_crear_mutex() {
+    return -1;
+}
+
+int sis_abrir_mutex() {
+    return -1;
+}
+
+int sis_cerrar_mutex() {
+    return -1;
+}
+
+int sis_lock() {
+    return -1;
+}
+
+int sis_unlock() {
+    return -1;
+}
 
 /*
  *
@@ -442,8 +481,8 @@ int main(){
 	iniciar_cont_int();		/* inicia cont. interr. */
 	iniciar_cont_reloj(TICK);	/* fija frecuencia del reloj */
 	iniciar_cont_teclado();		/* inici cont. teclado */
-
 	iniciar_tabla_proc();		/* inicia BCPs de tabla de procesos */
+	iniciar_tabla_mutex();
 
 	/* crea proceso inicial */
 	if (crear_tarea((void *)"init")<0)

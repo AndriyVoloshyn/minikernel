@@ -18,6 +18,9 @@
 #ifndef _KERNEL_H
 #define _KERNEL_H
 
+#define NO_RECURSIVO 0
+#define RECURSIVO 1
+
 #include "const.h"
 #include "HAL.h"
 #include "llamsis.h"
@@ -38,6 +41,7 @@ typedef struct BCP_t {
 	BCPptr siguiente;		/* puntero a otro BCP */
 	void *info_mem;			/* descriptor del mapa de memoria */
 	int ticks_restantes;		/* ticks de reloj que le faltan para despertar*/
+	int descriptores_mutex[NUM_MUT_PROC];	/* Mapeo descriptor local -> indice tabla mutex*/
 } BCP;
 
 /*
@@ -52,6 +56,18 @@ typedef struct{
 	BCP *primero;
 	BCP *ultimo;
 } lista_BCPs;
+
+/* Definicion de la estructura del mutex*/
+
+typedef struct {
+    char nombre[MAX_NOM_MUT];  /* Nombre del mutex (máx 8 caracteres con \0) */
+    int tipo;                  /* NO_RECURSIVO o RECURSIVO */
+    int ocupado;               /* 1 si el mutex existe/está creado en el sistema, 0 si libre */
+    BCP *propietario;          /* Puntero al BCP que tiene el lock actual (o NULL si libre) */
+    int num_locks;             /* Contador de anidamiento para recursivos */
+    int ref_count;             /* Número de descriptores apuntando a este mutex */
+    lista_BCPs cola_bloqueados;/* Procesos esperando a obtener este mutex (lock) */
+} mutex_t;
 
 
 /*
@@ -76,6 +92,12 @@ lista_BCPs lista_listos= {NULL, NULL};
  */
 lista_BCPs lista_bloqueados_reloj = {NULL, NULL};
 
+/* tabla global del mutex del sistema*/
+mutex_t tabla_mutex[NUM_MUT];
+
+/* Cola de procesos esperando a que se libere una entrada en la tabla_mutex*/
+lista_BCPs lista_bloqueados_crear_mutex ={NULL, NULL};
+
 /*
  *
  * Definici�n del tipo que corresponde con una entrada en la tabla de
@@ -95,15 +117,25 @@ int sis_terminar_proceso();
 int sis_escribir();
 int sis_obtener_id_pr();
 int sis_dormir();
+int sis_crear_mutex();
+int sis_abrir_mutex();
+int sis_cerrar_mutex();
+int sis_lock();
+int sis_unlock();
 
 /*
  * Variable global que contiene las rutinas que realizan cada llamada
  */
-servicio tabla_servicios[NSERVICIOS]={	{sis_crear_proceso},
+servicio tabla_servicios[NSERVICIOS]={	
+					{sis_crear_proceso},
 					{sis_terminar_proceso},
 					{sis_escribir},
 					{sis_obtener_id_pr},
-					{sis_dormir}};
+					{sis_dormir},
+					{sis_crear_mutex},
+					{sis_cerrar_mutex},
+					{sis_lock},
+					{sis_unlock}};
 
 #endif /* _KERNEL_H */
 

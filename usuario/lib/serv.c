@@ -49,3 +49,25 @@ int obtener_id_pr(){
 int dormir (unsigned int segundos){
    return llamsis(DORMIR, 1, (long)segundos);
 }
+
+
+/* funciones especificas para el control del mutex */
+int crear_mutex(char *nombre, int tipo) {
+    return llamsis(CREAR_MUTEX, 2, (long)nombre, (long)tipo);
+}
+
+int abrir_mutex(char *nombre) {
+    return llamsis(ABRIR_MUTEX, 1, (long)nombre);
+}
+
+int cerrar_mutex(unsigned int mutexid) {
+    return llamsis(CERRAR_MUTEX, 1, (long)mutexid);
+}
+
+int lock(unsigned int mutexid) {
+    return llamsis(LOCK, 1, (long)mutexid);
+}
+
+int unlock(unsigned int mutexid) {
+    return llamsis(UNLOCK, 1, (long)mutexid);
+}
