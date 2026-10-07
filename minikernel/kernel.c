@@ -788,8 +788,7 @@ int sis_cerrar_mutex()
  * Tratamiento de llamada al sistema lock.
  * Parámetro en registro 1: unsigned int mutexid (descriptor local)
  */
-int sis_lock()
-{
+int sis_lock() {
     unsigned int mutexid;
     int idx_mut;
     int nivel_previo;
@@ -798,8 +797,7 @@ int sis_lock()
     mutexid = (unsigned int)leer_registro(1);
 
     /* 1. Validar rango del descriptor local */
-    if (mutexid >= NUM_MUT_PROC)
-    {
+    if (mutexid >= NUM_MUT_PROC) {
         return -1;
     }
 
@@ -807,34 +805,34 @@ int sis_lock()
     nivel_previo = fijar_nivel_int(NIVEL_3);
 
     idx_mut = p_proc_actual->descriptores_mutex[mutexid];
-    if (idx_mut == -1 || !tabla_mutex[idx_mut].ocupado)
-    {
+    if (idx_mut == -1 || !tabla_mutex[idx_mut].ocupado) {
         fijar_nivel_int(nivel_previo);
         return -1;
     }
 
-    /* 3. Caso: el proceso actual YA es el dueño */
-    if (tabla_mutex[idx_mut].propietario == p_proc_actual)
-    {
-        if (tabla_mutex[idx_mut].tipo == NO_RECURSIVO)
-        {
-            /* Error: no se permite rebloqueo en mutex no recursivo */
+    /* 3. Caso: el proceso actual YA es el propietario */
+    if (tabla_mutex[idx_mut].propietario == p_proc_actual) {
+        if (tabla_mutex[idx_mut].tipo == NO_RECURSIVO) {
+            /* Error: rebloqueo en mutex no recursivo */
             fijar_nivel_int(nivel_previo);
             return -1;
+        } else {
+            /* Mutex RECURSIVO: incrementamos el anidamiento y retornamos éxito */
+            tabla_mutex[idx_mut].num_locks++;
+            fijar_nivel_int(nivel_previo);
+            return 0;
         }
-        /* Nota: el soporte para tipo RECURSIVO se completará en 2B.2 */
     }
 
-    /* 4. Caso: el mutex está libre */
-    if (tabla_mutex[idx_mut].propietario == NULL)
-    {
+    /* 4. Caso: el mutex está completamente libre */
+    if (tabla_mutex[idx_mut].propietario == NULL) {
         tabla_mutex[idx_mut].propietario = p_proc_actual;
         tabla_mutex[idx_mut].num_locks = 1;
         fijar_nivel_int(nivel_previo);
         return 0;
     }
 
-    /* 5. Caso: el mutex está ocupado por otro proceso -> Bloquearse */
+    /* 5. Caso: el mutex pertenece a otro proceso -> Bloquearse */
     p_proc_actual->estado = BLOQUEADO;
     eliminar_primero(&lista_listos);
     insertar_ultimo(&(tabla_mutex[idx_mut].cola_bloqueados), p_proc_actual);
@@ -855,8 +853,7 @@ int sis_lock()
  * Tratamiento de llamada al sistema unlock.
  * Parámetro en registro 1: unsigned int mutexid (descriptor local)
  */
-int sis_unlock()
-{
+int sis_unlock() {
     unsigned int mutexid;
     int idx_mut;
     int nivel_previo;
@@ -865,8 +862,7 @@ int sis_unlock()
     mutexid = (unsigned int)leer_registro(1);
 
     /* 1. Validar rango del descriptor local */
-    if (mutexid >= NUM_MUT_PROC)
-    {
+    if (mutexid >= NUM_MUT_PROC) {
         return -1;
     }
 
@@ -874,38 +870,39 @@ int sis_unlock()
     nivel_previo = fijar_nivel_int(NIVEL_3);
 
     idx_mut = p_proc_actual->descriptores_mutex[mutexid];
-    if (idx_mut == -1 || !tabla_mutex[idx_mut].ocupado)
-    {
+    if (idx_mut == -1 || !tabla_mutex[idx_mut].ocupado) {
         fijar_nivel_int(nivel_previo);
         return -1;
     }
 
     /* 3. Solo el propietario puede hacer unlock */
-    if (tabla_mutex[idx_mut].propietario != p_proc_actual)
-    {
+    if (tabla_mutex[idx_mut].propietario != p_proc_actual) {
         fijar_nivel_int(nivel_previo);
         return -1;
     }
 
-    /* 4. En NO_RECURSIVO liberamos directamente */
-    tabla_mutex[idx_mut].num_locks = 0;
+    /* 4. Decrementar contador de anidamiento */
+    tabla_mutex[idx_mut].num_locks--;
 
-    /* Si hay procesos esperando en la cola del mutex, transferimos la posesión */
-    if (tabla_mutex[idx_mut].cola_bloqueados.primero != NULL)
-    {
+    /* Si todavía quedan locks anidados, el mutex continúa ocupado por el mismo proceso */
+    if (tabla_mutex[idx_mut].num_locks > 0) {
+        fijar_nivel_int(nivel_previo);
+        return 0;
+    }
+
+    /* 5. num_locks llegó a 0: liberación real del mutex */
+    if (tabla_mutex[idx_mut].cola_bloqueados.primero != NULL) {
         proc_despertado = tabla_mutex[idx_mut].cola_bloqueados.primero;
         eliminar_primero(&(tabla_mutex[idx_mut].cola_bloqueados));
 
-        /* El proceso despertado adquiere el mutex */
+        /* Transferencia directa de posesión al proceso despertado */
         tabla_mutex[idx_mut].propietario = proc_despertado;
         tabla_mutex[idx_mut].num_locks = 1;
 
         proc_despertado->estado = LISTO;
         insertar_ultimo(&lista_listos, proc_despertado);
-    }
-    else
-    {
-        /* No hay nadie esperando, el mutex queda completamente libre */
+    } else {
+        /* Nadie espera: queda libre */
         tabla_mutex[idx_mut].propietario = NULL;
     }
 
