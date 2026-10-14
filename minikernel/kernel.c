@@ -129,6 +129,10 @@ static BCP *planificador()
 {
     while (lista_listos.primero == NULL)
         espera_int(); /* No hay nada que hacer */
+
+    /* Conceder siempre una rodaja completa al proceso que toma la CPU */
+    lista_listos.primero->ticks_rodaja = TICKS_POR_RODAJA;
+
     return lista_listos.primero;
 }
 
@@ -268,6 +272,20 @@ static void int_reloj()
 
         /* Avanzamos al siguiente elemento */
         actual = siguiente;
+    }
+    /* Solo se consume rodaja si:
+     * 1. Hay un proceso en ejecución asignado.
+     * 2. Hay más de un proceso en el sistema o viene de ejecutar modo usuario (no en espera_int).
+     */
+    if (p_proc_actual != NULL && viene_de_modo_usuario())
+    {
+        p_proc_actual->ticks_rodaja--;
+
+        /* Si se agota la rodaja, se solicita la interrupción software diferida */
+        if (p_proc_actual->ticks_rodaja <= 0)
+        {
+            activar_int_SW();
+        }
     }
 
     return;
@@ -420,6 +438,7 @@ static int crear_tarea(char *prog)
                            &(p_proc->contexto_regs));
         p_proc->id = proc;
         p_proc->estado = LISTO;
+        p_proc->ticks_rodaja = TICKS_POR_RODAJA; // Rodaja inicial completa
         int j;
         for (j = 0; j < NUM_MUT_PROC; j++)
         {

@@ -42,6 +42,7 @@ typedef struct BCP_t {
 	void *info_mem;			/* descriptor del mapa de memoria */
 	int ticks_restantes;		/* ticks de reloj que le faltan para despertar*/
 	int descriptores_mutex[NUM_MUT_PROC];	/* Mapeo descriptor local -> indice tabla mutex*/
+	int ticks_rodaja;			/*ticks restantes de su rodaja de CPU*/
 } BCP;
 
 /*
