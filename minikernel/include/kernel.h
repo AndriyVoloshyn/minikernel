@@ -82,6 +82,10 @@ BCP * p_proc_actual=NULL;
  */
 
 BCP tabla_procs[MAX_PROC];
+/*
+ * Variable global que indica a qué proceso se pretendía expulsar por fin de rodaja
+ */
+BCP * proc_a_expulsar = NULL;
 
 /*
  * Variable global que representa la cola de procesos listos

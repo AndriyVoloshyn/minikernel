@@ -156,6 +156,9 @@ static void liberar_proceso()
             sis_cerrar_mutex();      /* Cierra el mutex y despierta si procede */
         }
     }
+    if (proc_a_expulsar == p_proc_actual){
+        proc_a_expulsar = NULL;
+    }
 
     /* Liberación normal del mapa de memoria */
     liberar_imagen(p_proc_actual->info_mem); /* liberar mapa */
@@ -281,9 +284,10 @@ static void int_reloj()
     {
         p_proc_actual->ticks_rodaja--;
 
-        /* Si se agota la rodaja, se solicita la interrupción software diferida */
+        /* Si se agota la rodaja, marcamos al candidato y activamos la int SW */
         if (p_proc_actual->ticks_rodaja <= 0)
         {
+            proc_a_expulsar = p_proc_actual;
             activar_int_SW();
         }
     }
@@ -396,12 +400,50 @@ static void tratar_llamsis()
 }
 
 /*
- * Tratamiento de interrupciuones software
+ * Tratamiento de interrupciones software
+ * Realiza el cambio de contexto involuntario de Round-Robin
  */
-static void int_sw()
-{
+static void int_sw(){
+    BCP *p_proc_antiguo;
+    int nivel_previo;
 
-    printk("-> TRATANDO INT. SW\n");
+    /* 1. Sección crítica: proteger la manipulación de la cola de listos */
+    nivel_previo = fijar_nivel_int(NIVEL_3);
+    
+    if (p_proc_actual != proc_a_expulsar) {
+        /* El proceso previo cedió voluntariamente la CPU (dormir, lock, fin).
+         * Neutralizamos la interrupción software para no perjudicar al actual. */
+        fijar_nivel_int(nivel_previo);
+        return;
+    }
+
+    /* Limpiamos la variable una vez confirmada la expulsión */
+    proc_a_expulsar = NULL;
+
+    /* 2. Si no hay más de un proceso listo, no hay a quién cederle el procesador */
+    if (lista_listos.primero == NULL || lista_listos.primero->siguiente == NULL) {
+        /* Se le concede una nueva rodaja completa al único proceso ejecutable */
+        if (p_proc_actual != NULL) {
+            p_proc_actual->ticks_rodaja = TICKS_POR_RODAJA;
+        }
+        fijar_nivel_int(nivel_previo);
+        return;
+    }
+
+    /* 3. Rotar el proceso actual: sacarlo de la cabeza y ponerlo al final */
+    eliminar_primero(&lista_listos);
+    insertar_ultimo(&lista_listos, p_proc_actual);
+
+    /* 4. Seleccionar el nuevo proceso que pasa a ejecutar */
+    p_proc_antiguo = p_proc_actual;
+    p_proc_actual = planificador();
+
+    printk("-> ROUND-ROBIN (INT SW): C.CONTEXTO de %d a %d\n",
+           p_proc_antiguo->id, p_proc_actual->id);
+
+    /* 5. Restaurar nivel previo y ejecutar cambio de contexto */
+    fijar_nivel_int(nivel_previo);
+    cambio_contexto(&(p_proc_antiguo->contexto_regs), &(p_proc_actual->contexto_regs));
 
     return;
 }
@@ -550,6 +592,10 @@ int sis_dormir()
     /* 5. Mover el proceso: sacarlo de lista_listos y meterlo en lista_bloqueados_reloj */
     eliminar_primero(&lista_listos);
     insertar_ultimo(&lista_bloqueados_reloj, p_proc_actual);
+
+    if (proc_a_expulsar == p_proc_actual){
+        proc_a_expulsar = NULL;
+    }
 
     /* 6. Conmutar contexto voluntario:
           Guardamos referencia al que se duerme y elegimos el nuevo proceso */
@@ -855,6 +901,10 @@ int sis_lock() {
     p_proc_actual->estado = BLOQUEADO;
     eliminar_primero(&lista_listos);
     insertar_ultimo(&(tabla_mutex[idx_mut].cola_bloqueados), p_proc_actual);
+
+    if (proc_a_expulsar == p_proc_actual){
+        proc_a_expulsar = NULL;
+    }
 
     p_proc_antiguo = p_proc_actual;
     p_proc_actual = planificador();
