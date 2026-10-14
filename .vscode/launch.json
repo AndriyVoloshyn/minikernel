@@ -1,24 +1,34 @@
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Ejecutar",
-      "type": "cppdbg",
-      "request": "launch",
-      "program": "${workspaceFolder}/boot/boot",
-      "args": ["${workspaceFolder}/minikernel/kernel"],
-      "cwd": "${workspaceFolder}",
-      "preLaunchTask": "make build",
-      "stopAtEntry": false,
-      "externalConsole": false,
-      "MIMode": "gdb",
-      "setupCommands": [
+    "version": "0.2.0",
+    "configurations": [
         {
-          "description": "Ignorar SIGUSR1 en el depurador",
-          "text": "-interpreter-exec console \"handle SIGUSR1 nostop noprint pass\"",
-          "ignoreFailures": false
+            "name": "Ejecutar Minikernel",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/boot/boot",
+            "args": ["${workspaceFolder}/minikernel/kernel"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Habilitar formato de impresión estructurado para gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Ignorar la señal de reloj del HAL (SIGUSR1)",
+                    "text": "handle SIGUSR1 nostop noprint pass",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Ignorar la señal de trap/llamadas al sistema del HAL (SIGUSR2)",
+                    "text": "handle SIGUSR2 nostop noprint pass",
+                    "ignoreFailures": true
+                }
+            ]
         }
-      ]
-    }
-  ]
+    ]
 }
